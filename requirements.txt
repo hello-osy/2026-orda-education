@@ -1,0 +1,7 @@
+numpy>=1.24,<3
+opencv-python>=4.8,<6
+torch>=2.2,<3
+setuptools>=65,<81
+colcon-common-extensions>=0.3
+pytest>=8,<10
+PySide6-Essentials>=6.6,<7

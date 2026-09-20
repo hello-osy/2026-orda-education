@@ -1,0 +1,88 @@
+{
+  "num_classes": 6,
+  "class_names": [
+    "background",
+    "road",
+    "lane_solid",
+    "lane_dashed",
+    "green_mat",
+    "light_gray"
+  ],
+  "ignore_index": 255,
+  "merged": {
+    "obstacle_vehicle": "background"
+  },
+  "train_images": 268,
+  "val_images": 79,
+  "test_images": 79,
+  "split_ratio_actual": {
+    "train": 0.6291,
+    "val": 0.1854,
+    "test": 0.1854
+  },
+  "seed": 0,
+  "class_pixel_share": {
+    "background": 0.070313,
+    "road": 0.651538,
+    "lane_solid": 0.035848,
+    "lane_dashed": 0.009334,
+    "green_mat": 0.213555,
+    "light_gray": 0.019412
+  },
+  "class_weights": [
+    0.7549,
+    0.0815,
+    1.4807,
+    5.6866,
+    0.2486,
+    2.7344
+  ],
+  "split_report": [
+    {
+      "session": "lions",
+      "groups": 5,
+      "images": 121,
+      "val_groups": [
+        "lions_rosbag2_2026_07_25_21_56_03s02"
+      ],
+      "val_images": 24,
+      "val_ratio": 0.198,
+      "test_groups": [
+        "lions_rosbag2_2026_07_25_21_56_03s01"
+      ],
+      "test_images": 24,
+      "test_ratio": 0.198
+    },
+    {
+      "session": "skku",
+      "groups": 9,
+      "images": 213,
+      "val_groups": [
+        "skku_rosbag2_2026_08_05_11_29_45s01"
+      ],
+      "val_images": 30,
+      "val_ratio": 0.141,
+      "test_groups": [
+        "skku_rosbag2_2026_08_05_11_29_45s00",
+        "skku_rosbag2_2026_08_05_11_34_43s03"
+      ],
+      "test_images": 34,
+      "test_ratio": 0.16
+    },
+    {
+      "session": "yunggyo",
+      "groups": 4,
+      "images": 92,
+      "val_groups": [
+        "yunggyo_rosbag2_2026_08_05_05_57_09s02"
+      ],
+      "val_images": 25,
+      "val_ratio": 0.272,
+      "test_groups": [
+        "yunggyo_rosbag2_2026_08_05_05_57_09s00"
+      ],
+      "test_images": 21,
+      "test_ratio": 0.228
+    }
+  ]
+}
