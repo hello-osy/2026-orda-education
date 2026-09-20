@@ -10,7 +10,8 @@ from rclpy.node import Node
 from std_msgs.msg import String
 from sensor_msgs.msg import Image
 
-ROOT=Path(__file__).resolve().parents[1]
+# 패키지 내부의 검증 스크립트에서 프로젝트 루트(녹화·출력 폴더)를 찾습니다.
+ROOT=Path(__file__).resolve().parents[3]
 STAGES=['segmentation','scan_line','pid','reference_color_filter','reference_sliding_window','pipeline_after']
 OUT=ROOT/'output/validation';OUT.mkdir(parents=True,exist_ok=True)
 

@@ -237,8 +237,8 @@ ROS와 프로젝트 환경을 활성화한 터미널에서 실행합니다. 상�
 
 ```bash
 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest src/session_1/test -q
-ROS_DOMAIN_ID=98 ROS_LOG_DIR="$PWD/output/roslogs" python scripts/verify_rosbag.py
-python scripts/verify_full_bag.py
+ROS_DOMAIN_ID=98 ROS_LOG_DIR="$PWD/output/roslogs" python src/session_1/scripts/verify_rosbag.py
+python src/session_1/scripts/verify_full_bag.py
 ```
 
 첫 명령은 ROS 전역 pytest 플러그인을 자동 로드하지 않습니다(로컬 ROS의 `launch_pytest`가 요구하는 별도 패키지와 수업 단위 테스트를 분리). 두 번째는 여섯 노드의 DDS 출력·bag 반복·종료를 검사하고, 세 번째는 상단 카메라 전체 2,075프레임을 실제 PIDNet으로 누락 없이 처리합니다. 검출 횟수는 정답 라벨과 비교한 정확도 지표가 아닙니다.

@@ -277,7 +277,7 @@ ROS 2와 자율주행이 처음이어도 괜찮습니다. **명령어 하나로 
 > python -c "import rclpy, cv2, torch, PySide6; print('수업 라이브러리 OK')"
 > ```
 >
-> `session_1 classroom`을 포함한 실행 파일들이 나오면 준비 완료입니다. **3번의 `bash start.sh`를 실행하세요.** WSL에서는 이후에도 Ubuntu 터미널을 사용합니다.
+> `session_1 classroom`을 포함한 실행 파일들이 나오면 준비 완료입니다. **3번에서 녹화 파일을 준비한 뒤 `bash start.sh`를 실행하세요.** WSL에서는 이후에도 Ubuntu 터미널을 사용합니다.
 >
 > 근거: [ROS Jazzy 설치](https://docs.ros.org/en/jazzy/Installation/Ubuntu-Install-Debs.html), [공식 저장소 등록 명령](https://github.com/ros2/ros2_documentation/blob/jazzy/source/Installation/_Apt-Repositories.rst), [Qt Linux 의존성](https://doc.qt.io/qt-6/linux-requirements.html), [OpenCV 패키지 선택](https://pypi.org/project/opencv-python/).
 >
@@ -336,6 +336,36 @@ ROS 2와 자율주행이 처음이어도 괜찮습니다. **명령어 하나로 
 
 ## 3. 시각화 화면 띄우기
 
+**처음 실행하기 전에 녹화 파일을 한 번 내려받아 주세요.**
+
+> <details>
+> <summary>처음 한 번: rosbag 다운로드·압축 풀기</summary>
+>
+> 1. [수업 rosbag 다운로드 페이지](https://app.notion.com/p/session1-rosbag-file-3e14af7a2973805b83f9e70ffe7c18b0?source=copy_link)를 열고 압축 파일을 다운로드하세요.
+> 2. 다운로드한 파일의 **압축을 풀어 주세요.**
+> 3. 안에 있는 `rosbag2_2026_08_05-11_29_45` 폴더를 **`start.sh`가 있는 프로젝트 폴더 안으로** 옮기세요.
+>
+> 아래처럼 `metadata.yaml`과 `.db3` 파일이 녹화 폴더 바로 안에 있으면 됩니다. 같은 이름의 폴더가 두 겹으로 들어가지 않도록 확인하세요.
+>
+> ```text
+> 2026-orda-education/
+> ├── README.md
+> ├── start.sh
+> └── rosbag2_2026_08_05-11_29_45/
+>     ├── metadata.yaml
+>     └── rosbag2_2026_08_05-11_29_45_0.db3
+> ```
+>
+> **Windows WSL2 사용자:** Ubuntu 터미널에서 프로젝트 폴더로 이동한 뒤 아래 명령을 실행하면 Windows 파일 탐색기로 해당 폴더가 열립니다. 압축을 푼 녹화 폴더를 여기에 복사하세요.
+>
+> ```bash
+> explorer.exe .
+> ```
+>
+> 이미 위 위치에 녹화 파일이 있다면 다시 다운로드하지 않아도 됩니다.
+>
+> </details>
+
 **프로젝트 폴더의 터미널 하나에서 아래 명령만 실행하세요.** Windows는 Ubuntu 터미널, macOS는 Mac 터미널을 사용합니다. 환경 설정과 녹화 파일 재생은 자동입니다.
 
 ```bash
@@ -380,7 +410,7 @@ bash start.sh
 > bash start.sh --device cpu
 > ```
 >
-> 모델과 녹화 폴더 `rosbag2_2026_08_05-11_29_45`는 프로젝트에 포함되어 있습니다. 녹화 폴더를 이동했다면 프로젝트 안에 옮겨 둔 폴더를 `--bag ./my_bag`처럼 지정하세요(`my_bag`은 해당 녹화 폴더 이름).
+> 모델은 프로젝트에 포함되어 있으며, 녹화 파일은 위 다운로드 토글을 따라 별도로 준비합니다. 녹화 폴더를 이동했다면 프로젝트 안에 옮겨 둔 폴더를 `--bag ./my_bag`처럼 지정하세요(`my_bag`은 해당 녹화 폴더 이름).
 >
 > [상세 사용법·개별 ROS 노드](docs/USAGE_DETAIL.md) · [검증 기록](docs/VALIDATION.md) · [코드·모델 출처](docs/THIRD_PARTY.md)
 >

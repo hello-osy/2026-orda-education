@@ -16,7 +16,8 @@ from session_1.reference_color_filter_view import ColorFilterView
 from session_1.pid_view import PID,Feedback,History
 from session_1.pipeline_after_view import visualize as after_view
 
-ROOT=Path(__file__).resolve().parents[1];OUT=ROOT/'output/validation'
+# 패키지 내부의 검증 스크립트에서 프로젝트 루트(녹화·출력 폴더)를 찾습니다.
+ROOT=Path(__file__).resolve().parents[3];OUT=ROOT/'output/validation'
 
 def main():
     OUT.mkdir(parents=True,exist_ok=True)

@@ -126,8 +126,8 @@ Windows/Linux 설치와 GUI, CUDA, 실제 차량 폐루프 주행은 이번 Mac 
 
 ROS/프로젝트 setup을 활성화하고 README의 검증 명령을 사용합니다.
 
-- `scripts/verify_rosbag.py`: DDS 이미지·JSON 수신, 5배속 반복, PWM 범위, 모터 발행자 부재, 정상 종료.
-- `scripts/verify_full_bag.py`: 실제 모델을 사용한 전체 프레임 순차 처리.
+- `src/session_1/scripts/verify_rosbag.py`: DDS 이미지·JSON 수신, 5배속 반복, PWM 범위, 모터 발행자 부재, 정상 종료.
+- `src/session_1/scripts/verify_full_bag.py`: 실제 모델을 사용한 전체 프레임 순차 처리.
 - `output/validation/ros-summary.json`, `full-bag-summary.json`, `native-summary.json`: 이번 실행 수치.
 - 같은 폴더의 로그와 PNG: 각 실행 경로의 결과. 출력 폴더는 git 제외.
 
