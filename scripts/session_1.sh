@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# 한 번의 실행으로 ROS/프로젝트 환경을 불러오고 통합 수업 창을 연다.
+# 프로젝트 위치에 맞춰 ROS 환경을 불러오고 1회차 수업을 실행한다.
 set -e
-PROJECT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$PROJECT_DIR"
 if [[ "$(uname -s)" == Darwin ]]; then
   ROS_SETUP="$HOME/ros2_jazzy/install/setup.bash"
@@ -9,7 +9,7 @@ else
   ROS_SETUP=/opt/ros/jazzy/setup.bash
 fi
 if [[ ! -f "$ROS_SETUP" || ! -x .venv/bin/python || ! -f install/setup.bash ]]; then
-  echo '처음 실행하기 전 README의 2. 가상환경 세팅 & ROS2 설치를 완료해 주세요.' >&2
+  echo 'README.md의 공통 설치와 Session 1 빌드를 먼저 완료해 주세요.' >&2
   exit 1
 fi
 source "$ROS_SETUP"

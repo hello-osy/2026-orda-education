@@ -4,7 +4,7 @@ ROS 2와 자율주행이 처음이어도 괜찮습니다. **명령어 하나로 
 
 ## 1. 프로젝트 개요
 
-차량이 녹화한 영상을 보며 **보고 → 판단하고 → 움직임을 계산하는 과정**을 살펴봅니다.
+**보고 → 판단하고 → 움직임을 계산하는 과정**을 단계별로 살펴봅니다. Session 1은 녹화 영상으로 인지·판단·PID를 배우고, Session 2는 USB 센서 수집, bag, YOLOv8 학습·추론과 실제 스케일카 제어 코드로 이어집니다.
 
 > <details>
 > <summary>무엇을 배우나요?</summary>
@@ -13,20 +13,20 @@ ROS 2와 자율주행이 처음이어도 괜찮습니다. **명령어 하나로 
 > - **판단**: 사진에서 도로·차선을 찾고, 차선 위치를 기준과 비교해요.
 > - **제어**: 오차가 0에 수렴하도록 조향값과 속도값을 조절해요. 이 수업 화면에서는 그중 **조향 제어**를 살펴봅니다.
 >
-> **ROS 2**는 센서와 프로그램이 정보를 주고받게 하는 도구예요. **rosbag**은 그 정보를 저장한 녹화 파일이에요. 이 수업에서는 실제 차량 없이 녹화 파일로 연습합니다.
+> **ROS 2**는 센서와 프로그램이 정보를 주고받게 하는 도구예요. **rosbag**은 그 정보를 저장한 녹화 파일이에요. Session 1에서는 실제 차량 없이 녹화 파일로 연습합니다. Session 2에서는 통합 제어 소스를 읽고 수정·저장하고, 4번 ‘스케일카 굴려보기’에서 실시간 시각화와 Arduino 모터 제어를 연결합니다.
 >
 > </details>
 
 ## 2. 가상환경 세팅 & ROS2 설치
 
-**Git·Python·라이브러리가 하나도 없는 상태에서 시작하는 순서입니다.** 설치가 끝나면 매번 다시 설치하지 말고 3번만 실행하세요.
+**Git·Python·라이브러리가 하나도 없는 상태에서 시작하는 순서입니다.** 설치가 끝나면 매번 다시 설치하지 말고 아래 수업별 안내의 실행 명령을 사용하세요.
 
 | 내 컴퓨터 | 먼저 할 일 | 그다음 |
 |---|---|---|
 | Windows 11 | 아래 Windows 토글에서 WSL2 설치 | 「공통: Ubuntu에서 설치」 |
 | macOS · 새로 시작 | 아래 macOS 토글에서 ROS 2 직접 빌드 | 「macOS: 프로젝트 설치」 |
 | Linux · Ubuntu 24.04 | Ubuntu 터미널 열기 | 「공통: Ubuntu에서 설치」 |
-| macOS · ROS 2 빌드 완료 | 아래 「macOS: 프로젝트 설치」 | 3번 실행 |
+| macOS · ROS 2 빌드 완료 | 아래 「macOS: 프로젝트 설치」 | 수업별 안내로 이동 |
 
 **블록을 위에서 아래로 하나씩 복사하세요.** 명령이 끝나고 입력 커서가 돌아오면 다음 블록으로 넘어갑니다. `sudo` 비밀번호는 입력해도 화면에 보이지 않습니다. 다운로드·설치에는 인터넷과 여유 디스크 공간이 필요합니다. VS Code는 필수가 아닙니다.
 
@@ -173,7 +173,7 @@ ROS 2와 자율주행이 처음이어도 괜찮습니다. **명령어 하나로 
 >
 > **검증 범위:** 기존 M4 직접 빌드 환경은 실행 검증됐습니다. 위 명령의 패키지 선택은 현재 소스에서 확인했지만, 이 설치 절차 전체를 빈 Mac에서 새로 빌드한 것은 아닙니다. macOS/Xcode·Homebrew·Jazzy 소스 버전에 따라 추가 조정이 필요할 수 있습니다. Intel Mac은 이 안내의 검증 대상이 아닙니다.
 >
-> 참고: [ROS 공식 macOS 소스 빌드 문서](https://docs.ros.org/en/jazzy/Installation/Alternatives/macOS-Development-Setup.html), [Homebrew](https://brew.sh/), [기존 전체 빌드 기록](INSTALL_ROS2.md). 공식 macOS 문서는 오래된 OS 기준이므로, 이 수업에서는 위의 Python/CMake 버전과 제한된 패키지 구성을 사용합니다.
+> 참고: [ROS 공식 macOS 소스 빌드 문서](https://docs.ros.org/en/jazzy/Installation/Alternatives/macOS-Development-Setup.html), [Homebrew](https://brew.sh/). 공식 macOS 문서는 오래된 OS 기준이므로, 이 수업에서는 위의 Python/CMake 버전과 제한된 패키지 구성을 사용합니다.
 >
 > </details>
 
@@ -245,7 +245,7 @@ ROS 2와 자율주행이 처음이어도 괜찮습니다. **명령어 하나로 
 > cd 2026-orda-education
 > ```
 >
-> 이미 다운로드했다면 이 블록은 건너뛰고 **`README.md`와 `start.sh`가 있는 폴더의 터미널**에서 이어가세요. `git clone` 전에 `git init`을 실행하지 않습니다.
+> 이미 다운로드했다면 이 블록은 건너뛰고 **`README.md`와 `scripts/`가 있는 프로젝트 폴더의 터미널**에서 이어가세요. `git clone` 전에 `git init`을 실행하지 않습니다.
 >
 > **⑥ 프로젝트 가상환경과 Python 라이브러리 설치**
 >
@@ -277,7 +277,7 @@ ROS 2와 자율주행이 처음이어도 괜찮습니다. **명령어 하나로 
 > python -c "import rclpy, cv2, torch, PySide6; print('수업 라이브러리 OK')"
 > ```
 >
-> `session_1 classroom`을 포함한 실행 파일들이 나오면 준비 완료입니다. **3번에서 녹화 파일을 준비한 뒤 `bash start.sh`를 실행하세요.** WSL에서는 이후에도 Ubuntu 터미널을 사용합니다.
+> `session_1 classroom`을 포함한 실행 파일들이 나오면 준비 완료입니다. **docs/SESSION_1.md에서 녹화 파일을 준비한 뒤 `bash scripts/session_1.sh`를 실행하세요.** WSL에서는 이후에도 Ubuntu 터미널을 사용합니다.
 >
 > 근거: [ROS Jazzy 설치](https://docs.ros.org/en/jazzy/Installation/Ubuntu-Install-Debs.html), [공식 저장소 등록 명령](https://github.com/ros2/ros2_documentation/blob/jazzy/source/Installation/_Apt-Repositories.rst), [Qt Linux 의존성](https://doc.qt.io/qt-6/linux-requirements.html), [OpenCV 패키지 선택](https://pypi.org/project/opencv-python/).
 >
@@ -286,7 +286,7 @@ ROS 2와 자율주행이 처음이어도 괜찮습니다. **명령어 하나로 
 > <details>
 > <summary>macOS: 프로젝트 설치 — 위의 ROS 빌드 완료 후</summary>
 >
-> **위에서 ROS 빌드를 마쳤거나 이미 설치된 Mac에서 진행합니다.** `~/ros2_jazzy/install/setup.zsh`와 `~/ros2_jazzy/.venv/bin/python`이 있는 경우에 사용하세요. 직접 빌드의 기존 성공 기록과 제약은 [INSTALL_ROS2.md](INSTALL_ROS2.md)에 있습니다.
+> **위에서 ROS 빌드를 마쳤거나 이미 설치된 Mac에서 진행합니다.** `~/ros2_jazzy/install/setup.zsh`와 `~/ros2_jazzy/.venv/bin/python`이 있는 경우에 사용하세요. 빌드 범위와 제약은 위 macOS 설치 안내를 참고하세요.
 >
 > Git이 없다면 위 macOS 토글의 ①·②를 먼저 진행하세요. 아래 명령은 **Mac 터미널**에서 실행합니다.
 >
@@ -315,7 +315,7 @@ ROS 2와 자율주행이 처음이어도 괜찮습니다. **명령어 하나로 
 > python -c "import rclpy, cv2, torch, PySide6; print('수업 라이브러리 OK')"
 > ```
 >
-> 완료되면 3번으로 넘어가세요. 이 경로에서는 Mac 바탕화면에 GUI가 열립니다.
+> 완료되면 아래 수업별 안내로 이동하세요. 이 경로에서는 Mac 바탕화면에 GUI가 열립니다.
 >
 > </details>
 
@@ -334,84 +334,11 @@ ROS 2와 자율주행이 처음이어도 괜찮습니다. **명령어 하나로 
 >
 > </details>
 
-## 3. 시각화 화면 띄우기
+## 수업별 안내
 
-**처음 실행하기 전에 녹화 파일을 한 번 내려받아 주세요.**
+공통 설치를 마쳤다면 원하는 수업으로 이동하세요.
 
-> <details>
-> <summary>처음 한 번: rosbag 다운로드·압축 풀기</summary>
->
-> 1. [수업 rosbag 다운로드 페이지](https://app.notion.com/p/session1-rosbag-file-3e14af7a2973805b83f9e70ffe7c18b0?source=copy_link)를 열고 압축 파일을 다운로드하세요.
-> 2. 다운로드한 파일의 **압축을 풀어 주세요.**
-> 3. 안에 있는 `rosbag2_2026_08_05-11_29_45` 폴더를 **`start.sh`가 있는 프로젝트 폴더 안으로** 옮기세요.
->
-> 아래처럼 `metadata.yaml`과 `.db3` 파일이 녹화 폴더 바로 안에 있으면 됩니다. 같은 이름의 폴더가 두 겹으로 들어가지 않도록 확인하세요.
->
-> ```text
-> 2026-orda-education/
-> ├── README.md
-> ├── start.sh
-> └── rosbag2_2026_08_05-11_29_45/
->     ├── metadata.yaml
->     └── rosbag2_2026_08_05-11_29_45_0.db3
-> ```
->
-> **Windows WSL2 사용자:** Ubuntu 터미널에서 프로젝트 폴더로 이동한 뒤 아래 명령을 실행하면 Windows 파일 탐색기로 해당 폴더가 열립니다. 압축을 푼 녹화 폴더를 여기에 복사하세요.
->
-> ```bash
-> explorer.exe .
-> ```
->
-> 이미 위 위치에 녹화 파일이 있다면 다시 다운로드하지 않아도 됩니다.
->
-> </details>
+- [Session 1 · 인지 → 판단 → PID 시각화](docs/SESSION_1.md) — `bash scripts/session_1.sh`
+- [Session 2 · 센서 · bag · YOLOv8 · 코드 · 스케일카 주행](docs/SESSION_2.md) — `bash scripts/session_2.sh`
 
-**프로젝트 폴더의 터미널 하나에서 아래 명령만 실행하세요.** Windows는 Ubuntu 터미널, macOS는 Mac 터미널을 사용합니다. 환경 설정과 녹화 파일 재생은 자동입니다.
-
-```bash
-bash start.sh
-```
-
-다운로드 위치나 사용자 이름에 맞춰 명령을 고칠 필요가 없습니다. `start.sh`가 있는 폴더에서 실행하면 됩니다.
-
-> <details>
-> <summary>창이 열리면 이렇게 해보세요</summary>
->
-> 1. **전체 흐름**에서 세 단계의 결과를 한 번에 보세요.
-> 2. **1. 이미지 전처리 & 차선 검출 → 2. 주행 오차 계산 → 3. 조향 안정화**를 차례로 눌러보세요.
-> 3. **일시정지**를 누르세요. 1·2단계는 왼쪽 처리 전(BEFORE), 오른쪽 처리 후(AFTER)를 비교합니다. 3단계는 오차 그래프와 P/PID 출력을 봅니다.
-> 4. **전후 나란히 보기**를 끄면 처리 후 결과만 크게 볼 수 있어요. 3단계에서는 **오차와 출력 함께 보기**로 전환합니다.
-> 5. **한 장 앞으로** 또는 아래 재생 막대로 다른 순간을 살펴보세요.
->
-> **재생**으로 이어 보고, **처음부터**로 되돌아가세요. 끝까지 재생하면 자동으로 반복됩니다. **수업 종료**를 누르면 녹화 읽기도 함께 끝납니다.
->
-> </details>
-
-> <details>
-> <summary>직접 값을 바꿔보세요</summary>
->
-> - **주행 오차 계산**: 오른쪽 슬라이더로 측정 높이와 원하는 차선 위치를 바꿔보세요.
-> - **조향 안정화**: **수렴 모의 실험**에서 P/PID 오차 곡선이 0에 가까워지는 모습을 비교하세요. **녹화된 오차**로 전환하면 실제 기록의 오차 변화를 볼 수 있어요. 모의 실험은 실제 차량의 반응과 다릅니다.
-> - **참고: 색 필터**: RGB·HSV·YCrCb를 선택하고 슬라이더로 남길 색을 조절하세요.
-> - **참고: 차선 추적**: 작은 검색창이 차선을 따라가는 모습을 보세요.
->
-> 값을 바꿔도 **되돌리기** 버튼으로 기본값을 복원할 수 있어요. 실제 차량을 움직이지 않으며, PID 값을 바꿔도 녹화된 차량의 움직임은 바뀌지 않습니다.
->
-> </details>
-
-> <details>
-> <summary>실행이 안 되거나 더 자세히 알고 싶다면</summary>
->
-> - 설치 안내가 나오면 2번의 설치·빌드를 완료하세요.
-> - `No executable found`가 나오면 2번의 빌드를 다시 실행하세요.
-> - GPU 실행 오류가 나면 CPU로 실행하세요.
->
-> ```bash
-> bash start.sh --device cpu
-> ```
->
-> 모델은 프로젝트에 포함되어 있으며, 녹화 파일은 위 다운로드 토글을 따라 별도로 준비합니다. 녹화 폴더를 이동했다면 프로젝트 안에 옮겨 둔 폴더를 `--bag ./my_bag`처럼 지정하세요(`my_bag`은 해당 녹화 폴더 이름).
->
-> [상세 사용법·개별 ROS 노드](docs/USAGE_DETAIL.md) · [검증 기록](docs/VALIDATION.md) · [코드·모델 출처](docs/THIRD_PARTY.md)
->
-> </details>
+Session 2는 ROS 데몬/colcon 빌드 없이 프로젝트 `.venv`에서 실행합니다. 공통 개발환경은 위 안내를 그대로 사용하며, macOS·Ubuntu 24.04·Windows 11(WSL2 및 네이티브)의 실행과 장치 설정은 [SESSION_2.md](docs/SESSION_2.md)에 있습니다.

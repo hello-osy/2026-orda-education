@@ -1,0 +1,5 @@
+# 기존 프로젝트 requirements.txt 설치 후 추가 설치
+rplidar-roboticia==0.9.5
+pyserial==3.5
+rosbags==0.10.11
+ultralytics==8.4.165

@@ -79,7 +79,7 @@ class Classroom(QMainWindow):
         self.error_history=deque(maxlen=200);self.history_index=None
         self.settings={'scan_y':.75,'target_x':.79,'gains':(6.5,0.,.8)}
         root=QWidget();self.setCentralWidget(root);layout=QVBoxLayout(root);layout.setContentsMargins(24,18,24,18);layout.setSpacing(12)
-        title=QLabel('처음 만나는 자율주행');title.setStyleSheet('font-size:28px;font-weight:700;');layout.addWidget(title)
+        title=QLabel('ORDA 교육 1회차');title.setStyleSheet('font-size:28px;font-weight:700;');layout.addWidget(title)
         layout.addWidget(QLabel('인지: 카메라 기록  →  판단: 영역·차선 찾기  →  제어: 오차가 0에 수렴하도록 조향값·속도값 조절'))
         nav=QHBoxLayout();self.buttons=[];self.nav_group=QButtonGroup(self)
         for i,(name,_,__) in enumerate(LESSONS):
