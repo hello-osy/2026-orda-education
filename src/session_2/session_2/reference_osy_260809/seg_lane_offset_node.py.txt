@@ -1,0 +1,341 @@
+"""seg_lane_offset_node.
+
+timed_lane_offset_node 와 완전히 같은 주행 로직을 쓰되, 색 검출 대신
+학습된 세그멘테이션 모델로 차선을 찾는다.
+
+설계:
+    원본 노드의 segment_colors() 는 클래스마다 **고정된 BGR 색**을 칠한
+    이미지를 돌려주고, 그 뒤 단계(BEV 워프, 흰색/초록 마스크 추출, 디버그
+    시각화)는 전부 그 색을 기준으로 동작한다. 그래서 이 노드는
+    **segment_colors() 하나만 갈아끼운다.** 모델 출력을 원본과 똑같은 색으로
+    칠해서 돌려주므로 BEV 이후 로직은 한 줄도 바뀌지 않는다.
+
+    상속으로 만든 이유는 두 가지다.
+      - 기존 노드 파일을 건드리지 않는다. 대회 직전에 검증된 코드를
+        수정하지 않는 게 안전하다.
+      - 원본 로직(초록 매트 검증, 중앙선 폴백, 점프 제한, 스무딩)이 나중에
+        고쳐지면 이 노드도 자동으로 따라간다.
+
+안전장치:
+    - 시작할 때 더미 프레임으로 워밍업한다. 첫 추론은 cuDNN 벤치마크와 CUDA
+      컨텍스트 초기화 때문에 십수 초가 걸린다. 워밍업 없이 출발하면 그 시간
+      동안 조향이 멈춘다.
+    - 모델 로딩이나 추론이 실패하면 즉시 실패시켜 잘못된 마스크로 주행하지 않는다.
+
+실행:
+    ros2 run lane_offset seg_lane_offset_node --ros-args \
+        -p model_path:=<lane_seg>/models/lane_pidnet_s.pt \
+        -p dataset_info:=<lane_seg>/models/dataset_info.json
+
+    기존 노드와 나란히 비교하려면 노드 이름을 바꿔서 띄운다.
+        --ros-args -r __node:=seg_lane_offset_node
+"""
+
+import time
+from pathlib import Path
+
+import numpy as np
+import rclpy
+from rclpy.qos import (
+    DurabilityPolicy,
+    HistoryPolicy,
+    QoSProfile,
+    ReliabilityPolicy,
+)
+from std_msgs.msg import Bool
+
+import cv2
+
+from .timed_lane_offset_node import TimedLaneOffsetNggNode
+
+# 원본 segment_colors() 가 쓰는 색과 **정확히 같아야 한다**.
+# 이 값이 어긋나면 make_white_mask / make_green_mask 가 아무것도 못 찾는다.
+COLOR_WHITE = (255, 255, 255)
+COLOR_LIGHT_GRAY = (211, 211, 211)
+COLOR_DARK_GRAY = (105, 105, 105)
+COLOR_GREEN = (0, 255, 0)
+
+# 모델 클래스 이름 -> 원본이 쓰는 색.
+# 실선과 점선은 둘 다 흰색으로 합친다. 원본 로직이 흰색 하나만 보기 때문이다.
+# (모델은 둘을 구분할 수 있으므로, 나중에 그 정보를 쓰고 싶으면 여기서
+#  나누면 된다. 지금은 인식만 바꾸고 로직은 그대로 두는 게 목적이다.)
+CLASS_TO_COLOR = {
+    'lane_solid': COLOR_WHITE,
+    'lane_dashed': COLOR_WHITE,
+    'green_mat': COLOR_GREEN,
+    'road': COLOR_DARK_GRAY,
+    'light_gray': COLOR_LIGHT_GRAY,
+    # background 는 칠하지 않는다(0,0,0). 원본에서 어느 색에도 안 걸린 픽셀과
+    # 같은 상태가 된다.
+}
+
+RAW_CAMERA_WINDOW_NAME = 'PIDNet-S Raw Camera'
+SEGMENTATION_OVERLAY_WINDOW_NAME = 'PIDNet-S Segmentation Overlay'
+SEGMENTATION_OVERLAY_ALPHA = 0.55
+PROCESSING_RATE_HZ = 30.0
+LATENCY_LOG_PERIOD_SEC = 1.0
+SEG_LANE_OFFSET_READY_TOPIC = '/seg_lane_offset/ready'
+
+DEFAULT_PROJECT_ROOT = Path(
+    '/home/hailab/osy/260801/ai-autonomous-driving-competition-2026'
+)
+DEFAULT_LANE_SEG = DEFAULT_PROJECT_ROOT / 'lane_seg'
+
+
+class SegLaneOffsetNode(TimedLaneOffsetNggNode):
+    """세그멘테이션으로 차선을 찾는 lane_offset 노드."""
+
+    def __init__(self):
+        # 부모가 파라미터 선언과 구독/발행을 만든다.
+        # 콜백은 rclpy.spin() 전에는 안 돌므로 여기서 모델을 준비해도 된다.
+        super().__init__()
+
+        self.declare_parameter(
+            'model_path', str(DEFAULT_LANE_SEG / 'models' / 'lane_pidnet_s.pt')
+        )
+        self.declare_parameter(
+            'dataset_info', str(DEFAULT_LANE_SEG / 'models' / 'dataset_info.json')
+        )
+        self.declare_parameter('lane_seg_root', str(DEFAULT_LANE_SEG))
+        self.declare_parameter('device', 'cuda')
+        self.declare_parameter('processing_rate_hz', PROCESSING_RATE_HZ)
+        self.declare_parameter('log_period_sec', LATENCY_LOG_PERIOD_SEC)
+
+        # 빈 문자열이면 기본 경로를 쓴다. 런치 인자를 안 넘겼을 때를 위한 것이다.
+        self.model_path = str(self.get_parameter('model_path').value) or str(
+            DEFAULT_LANE_SEG / 'models' / 'lane_pidnet_s.pt'
+        )
+        self.dataset_info = str(self.get_parameter('dataset_info').value) or str(
+            DEFAULT_LANE_SEG / 'models' / 'dataset_info.json'
+        )
+        self.lane_seg_root = str(self.get_parameter('lane_seg_root').value) or str(
+            DEFAULT_LANE_SEG
+        )
+        self.device = str(self.get_parameter('device').value)
+        self.processing_rate_hz = max(
+            1.0, float(self.get_parameter('processing_rate_hz').value)
+        )
+        self.log_period_sec = float(self.get_parameter('log_period_sec').value)
+
+        self.segmenter = None
+        self.palette = None
+        self.visualization_palette = None
+        self.infer_times = []
+        self.camera_to_offset_times = []
+        self.last_log_time = time.monotonic()
+        self.latest_image_msg = None
+        self.latest_image_received_at = None
+        self.active_frame_received_at = None
+
+        self.setup_segmenter()
+        ready_qos = QoSProfile(
+            history=HistoryPolicy.KEEP_LAST,
+            depth=1,
+            reliability=ReliabilityPolicy.RELIABLE,
+            durability=DurabilityPolicy.TRANSIENT_LOCAL,
+        )
+        self.ready_pub = self.create_publisher(
+            Bool, SEG_LANE_OFFSET_READY_TOPIC, ready_qos
+        )
+        ready = Bool()
+        ready.data = True
+        self.ready_pub.publish(ready)
+        self.processing_timer = self.create_timer(
+            1.0 / self.processing_rate_hz,
+            self.process_latest_frame,
+        )
+        self.get_logger().info(
+            f'Latest-frame segmentation processing fixed at '
+            f'{self.processing_rate_hz:.1f} Hz'
+        )
+
+    def image_callback(self, msg):
+        """카메라 큐를 처리하지 않고 가장 최근 프레임 하나만 보관한다."""
+        self.latest_image_msg = msg
+        self.latest_image_received_at = time.perf_counter()
+
+    def process_latest_frame(self):
+        """고정 주기마다 새로 도착한 최신 프레임만 한 번 처리한다."""
+        msg = self.latest_image_msg
+        if msg is None:
+            return
+        received_at = self.latest_image_received_at
+        self.latest_image_msg = None
+        self.latest_image_received_at = None
+        self.active_frame_received_at = received_at
+        try:
+            super().image_callback(msg)
+        finally:
+            self.active_frame_received_at = None
+
+    def publish_offset(self, value):
+        """offset 발행 시 카메라 ROS 수신부터의 처리 지연을 함께 기록한다."""
+        super().publish_offset(value)
+        if self.active_frame_received_at is not None:
+            self.record_camera_to_offset_time(
+                time.perf_counter() - self.active_frame_received_at
+            )
+
+    # ------------------------------------------------------------------
+    def setup_segmenter(self):
+        """모델을 올리고 워밍업까지 끝낸다."""
+        import sys
+
+        if self.lane_seg_root not in sys.path:
+            sys.path.insert(0, self.lane_seg_root)
+
+        try:
+            from dsbuild.segmenter import LaneSegmenter
+        except ImportError as error:
+            self.get_logger().error(
+                f'lane_seg 를 import 하지 못했다: {error}\n'
+                f'  lane_seg_root={self.lane_seg_root}\n'
+                '  경로를 -p lane_seg_root:= 로 지정하거나 setup_pidnet.sh 를 실행할 것'
+            )
+            raise RuntimeError('lane_seg import 실패') from error
+
+        try:
+            self.segmenter = LaneSegmenter(
+                self.model_path, self.dataset_info, device=self.device
+            )
+        except Exception as error:
+            self.get_logger().error(f'모델을 올리지 못했다: {error}')
+            raise RuntimeError('모델 로딩 실패') from error
+
+        self.palette = self.build_palette(self.segmenter.class_names)
+        # 조향 로직에 전달하는 palette와 화면 표시용 palette를 분리한다.
+        # 내부 palette는 실선/점선을 모두 흰색으로 합쳐야 하지만, 시각화에서는
+        # 클래스별 색을 유지해야 PIDNet-S의 실제 예측을 구분해서 볼 수 있다.
+        self.visualization_palette = self.segmenter.default_palette()
+        missing = [
+            name for name in self.segmenter.class_names
+            if name not in CLASS_TO_COLOR and name != 'background'
+        ]
+        if missing:
+            self.get_logger().warn(
+                f'색 대응이 없는 클래스는 배경으로 처리한다: {missing}'
+            )
+
+        self.warm_up()
+
+    def build_palette(self, class_names):
+        """클래스 id -> 원본이 쓰는 BGR. palette[pred] 한 방에 칠하려고 만든다."""
+        palette = np.zeros((256, 3), dtype=np.uint8)
+        for index, name in enumerate(class_names):
+            color = CLASS_TO_COLOR.get(name)
+            if color is not None:
+                palette[index] = color
+        return palette
+
+    def warm_up(self):
+        """첫 추론은 십수 초가 걸린다. 주행 시작 전에 미리 치른다."""
+        dummy = np.zeros((480, 640, 3), dtype=np.uint8)
+        started = time.monotonic()
+        try:
+            for _ in range(3):
+                self.segmenter.predict(dummy)
+        except Exception as error:
+            self.get_logger().error(f'워밍업 실패: {error}')
+            raise RuntimeError('워밍업 실패') from error
+        self.get_logger().info(
+            f'세그멘테이션 준비 완료 ({time.monotonic() - started:.1f}s 워밍업), '
+            f'모델={Path(self.model_path).name}, '
+            f'클래스={self.segmenter.class_names}'
+        )
+
+    def segment_colors(self, frame):
+        """원본과 같은 계약: 클래스별 고정 색으로 칠한 BGR 이미지를 돌려준다.
+
+        이 메서드만 바뀌므로 warp_to_bev / make_white_mask / make_green_mask /
+        publish_debug 는 손대지 않아도 그대로 동작한다.
+        """
+        if self.debug_view:
+            cv2.imshow(RAW_CAMERA_WINDOW_NAME, frame)
+
+        try:
+            started = time.perf_counter()
+            pred = self.segmenter.predict(frame)
+            self.record_time(time.perf_counter() - started)
+        except Exception as error:
+            self.get_logger().error(f'추론 실패: {error}')
+            raise RuntimeError('PIDNet 추론 중 예외') from error
+
+        if pred.shape[:2] != frame.shape[:2]:
+            # 모델이 다른 해상도를 냈다면 라벨이므로 최근접으로 맞춘다.
+            pred = cv2.resize(
+                pred, (frame.shape[1], frame.shape[0]),
+                interpolation=cv2.INTER_NEAREST,
+            )
+        self.show_segmentation_overlay(frame, pred)
+        return self.palette[pred]
+
+    def show_segmentation_overlay(self, frame, pred):
+        """원본 위에 PIDNet-S 클래스 예측을 반투명 색으로 겹쳐 보여준다."""
+        if not self.debug_view or self.visualization_palette is None:
+            return
+
+        color_mask = self.visualization_palette[pred]
+        blended = cv2.addWeighted(
+            frame,
+            1.0 - SEGMENTATION_OVERLAY_ALPHA,
+            color_mask,
+            SEGMENTATION_OVERLAY_ALPHA,
+            0.0,
+        )
+
+        # background는 원본을 그대로 둬서 실제로 모델이 분류한 영역만 마스킹한다.
+        background_id = self.segmenter.name_to_id.get('background')
+        overlay = frame.copy()
+        if background_id is None:
+            overlay = blended
+        else:
+            foreground = pred != background_id
+            overlay[foreground] = blended[foreground]
+
+        cv2.imshow(SEGMENTATION_OVERLAY_WINDOW_NAME, overlay)
+
+    def record_time(self, seconds):
+        self.infer_times.append(seconds)
+
+    def record_camera_to_offset_time(self, seconds):
+        self.camera_to_offset_times.append(seconds)
+        now = time.monotonic()
+        if now - self.last_log_time < self.log_period_sec:
+            return
+        infer_times = np.array(self.infer_times)
+        pipeline_times = np.array(self.camera_to_offset_times)
+        self.infer_times = []
+        self.camera_to_offset_times = []
+        self.last_log_time = now
+        parts = []
+        if len(infer_times):
+            parts.append(
+                f'1회 추론당 {1000 * infer_times.mean():.1f}ms 평균 / '
+                f'{1000 * infer_times.max():.1f}ms 최대'
+            )
+        if len(pipeline_times):
+            parts.append(
+                f'카메라수신→lane_offset '
+                f'{1000 * pipeline_times.mean():.1f}ms 평균 / '
+                f'{1000 * pipeline_times.max():.1f}ms 최대 '
+                f'({len(pipeline_times)}프레임)'
+            )
+        if parts:
+            self.get_logger().info('[PIPELINE] ' + '; '.join(parts))
+
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = SegLaneOffsetNode()
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.destroy_node()
+        if rclpy.ok():
+            rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()

@@ -1,0 +1,144 @@
+"""timed_lane_main_node.
+
+역할:
+    시간주행(2차로 고정 주행) 미션에서 /lane_offset(오른쪽 차선 기준 offset, px)을
+    받아 steer/speed 를 계산하고 /motor_control 로 발행한다.
+
+제어 방식:
+    offset > 0 : 차가 왼쪽으로 치우쳐서(오른쪽 차선이 기준보다 더 오른쪽에 보임)
+                 오른쪽으로 조향해야 함 -> steer > 0 (drive_control 기준과 동일)
+    offset < 0 : 차가 오른쪽 차선에 너무 붙어서 왼쪽으로 조향해야 함 -> steer < 0
+
+출발 직후:
+    drive_control_node가 /motor_control 구독을 시작한 시점부터
+    initial_straight_duration_sec(기본 1초) 동안 offset 을 무시하고
+    steer=0 으로 직진한다. 미션주행 노드와 같은 방식이다.
+"""
+
+import rclpy
+from rclpy.node import Node
+from std_msgs.msg import Int16, Int16MultiArray
+
+# 구독/발행 토픽
+LANE_OFFSET_TOPIC = '/lane_offset'
+MOTOR_CONTROL_TOPIC = '/motor_control'
+
+
+
+######## 최대 조향각(angle임. +-45도) 및 속도(PWM. 0~255) ########
+# 순항 속도(PWM). 실차 트랙에서 반드시 재조정 필요.
+BASE_SPEED = 255
+# steer 값 clamp 범위 (-MAX_STEER ~ +MAX_STEER)
+MAX_STEER = 45
+# 출발 직후 조향 0으로 직진하는 시간(초). 0이면 비활성화.
+INITIAL_STRAIGHT_DURATION_SEC = 1.0
+#############################################################
+
+
+
+
+class TimedLaneMainNode(Node):
+    """/lane_offset -> steer/speed 계산 후 /motor_control 발행."""
+
+    def __init__(self):
+        super().__init__('timed_lane_main_node')
+
+        self.declare_parameter('base_speed', BASE_SPEED)
+        self.declare_parameter('max_steer', MAX_STEER)
+        self.declare_parameter(
+            'initial_straight_duration_sec', INITIAL_STRAIGHT_DURATION_SEC
+        )
+
+        self.lane_offset_topic = LANE_OFFSET_TOPIC
+        self.motor_control_topic = MOTOR_CONTROL_TOPIC
+        self.base_speed = int(self.get_parameter('base_speed').value)
+        self.max_steer = int(self.get_parameter('max_steer').value)
+        self.initial_straight_duration_sec = max(
+            0.0,
+            float(self.get_parameter('initial_straight_duration_sec').value),
+        )
+
+        self.motor_pub = self.create_publisher(
+            Int16MultiArray, self.motor_control_topic, 10
+        )
+        self.create_subscription(
+            Int16, self.lane_offset_topic, self.lane_offset_callback, 10
+        )
+
+        self.initial_straight_active = self.initial_straight_duration_sec > 0.0
+        self.initial_straight_deadline_ns = None
+        self.last_lane_offset = None
+        # lane_offset 이 아직 안 올라와도 직진 명령이 나가도록 별도 타이머를 쓴다.
+        self.create_timer(0.05, self.update_initial_straight_mode)
+
+        self.get_logger().info(
+            f'Subscribing {self.lane_offset_topic}, publishing {self.motor_control_topic}, '
+            f'initial steer=0 duration={self.initial_straight_duration_sec:.1f}s'
+        )
+
+    def lane_offset_callback(self, msg):
+        offset = int(msg.data)
+        self.last_lane_offset = offset
+        if self.initial_straight_active:
+            if self.arm_initial_straight_timer():
+                self.publish_motor_command(0, self.base_speed)
+            return
+        self.publish_lane_offset_command(offset)
+
+    def arm_initial_straight_timer(self):
+        """첫 실제 주행 명령 시점부터 초기 직진 시간을 계산한다."""
+        if self.initial_straight_deadline_ns is not None:
+            return True
+        # drive_control_node가 /motor_control 구독 준비를 마친 뒤부터 센다.
+        if self.motor_pub.get_subscription_count() == 0:
+            return False
+        self.initial_straight_deadline_ns = (
+            self.get_clock().now().nanoseconds
+            + int(self.initial_straight_duration_sec * 1_000_000_000)
+        )
+        self.get_logger().info(
+            f'Initial driving started; holding steer=0 for '
+            f'{self.initial_straight_duration_sec:.1f} seconds'
+        )
+        return True
+
+    def update_initial_straight_mode(self):
+        """첫 주행 명령부터 일정 시간 동안 조향 0으로 직진한다."""
+        if not self.initial_straight_active:
+            return
+
+        if not self.arm_initial_straight_timer():
+            return
+        if self.get_clock().now().nanoseconds < self.initial_straight_deadline_ns:
+            self.publish_motor_command(0, self.base_speed)
+            return
+
+        self.initial_straight_active = False
+        self.initial_straight_deadline_ns = None
+        self.get_logger().info(
+            'Initial straight interval complete; resuming lane tracking'
+        )
+        if self.last_lane_offset is not None:
+            self.publish_lane_offset_command(self.last_lane_offset)
+
+    def publish_lane_offset_command(self, offset):
+        # lane_offset 노드가 발행한 -45~45 값을 그대로 목표 조향각으로 사용한다.
+        steer = max(-self.max_steer, min(self.max_steer, offset))
+        self.publish_motor_command(steer, self.base_speed)
+
+    def publish_motor_command(self, steer, speed):
+        command = Int16MultiArray()
+        command.data = [int(steer), int(speed)]
+        self.motor_pub.publish(command)
+
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = TimedLaneMainNode()
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()

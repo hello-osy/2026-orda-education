@@ -8,7 +8,7 @@ from PySide6.QtCore import Qt, QPointF, QRectF
 from PySide6.QtGui import QColor, QPainter, QPen, QPainterPath, QKeySequence, QShortcut
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGroupBox,
                               QLabel, QPushButton, QComboBox, QSpinBox, QSizePolicy, QFileDialog)
-from .driving import DrivingPipeline, MotorControl
+from .competition_driving import DrivingPipeline, MotorControl
 from .sensors import serial_ports
 from .learning import Detector
 
@@ -88,7 +88,7 @@ class ScaleCarPage(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         row = QHBoxLayout()
         self.camera = QComboBox()
-        self.camera.addItems(['카메라 1', '카메라 2'])
+        self.camera.addItems(['카메라 1 · 차선 입력', '카메라 2 · 차선 입력'])
         self.camera.currentIndexChanged.connect(self.change_camera)
         row.addWidget(self.camera)
         self.start_button = QPushButton('추론 시작')
@@ -103,9 +103,9 @@ class ScaleCarPage(QWidget):
         layout.addLayout(row)
         views = QHBoxLayout()
         self.segmentation = picture_factory('Segmentation · 도로와 차선')
-        self.scan = picture_factory('Scan line · 주행 오차')
+        self.scan = picture_factory('BEV · 오른쪽 실선 / 중앙 점선')
         self.segmentation.clear('추론 시작을 누르세요')
-        self.scan.clear('차선 위치와 목표 위치를 비교합니다')
+        self.scan.clear('osy-260809 · 초록 검증 / 중앙선 폴백 / 조향 유지')
         views.addWidget(self.segmentation, 1)
         views.addWidget(self.scan, 1)
         pid_box = QGroupBox('PID · 조향 안정화')
@@ -154,7 +154,7 @@ class ScaleCarPage(QWidget):
         self.throttle = QSpinBox()
         self.throttle.setRange(150, 230)
         self.throttle.setValue(150)
-        self.throttle.setToolTip('전진 PWM 150~230 / 기본 150 / 차선 미검출 150')
+        self.throttle.setToolTip('전진 PWM 150~230 / 기본 150 / 차선 일시 미검출 시 직전 조향 유지')
         controls.addWidget(self.throttle)
         self.arm_button = QPushButton('주행 시작 · 실제 모터 출력')
         self.arm_button.clicked.connect(self.arm)
@@ -219,6 +219,10 @@ class ScaleCarPage(QWidget):
         self.generation += 1
         self.enabled = True
         self.last_stamp = None
+        self.last_result = None
+        if self.pipeline is not None and hasattr(self.pipeline, 'reset'):
+            # 동일 executor에서 기존 프레임 완료 후 상태 초기화, 다음 프레임 순으로 실행한다.
+            self.executor.submit(self.pipeline.reset)
         self.start_yolo()
         self.studio.ensure_live_camera()
         panel = self.studio.live.cameras[self.camera.currentIndex()]
@@ -390,7 +394,10 @@ class ScaleCarPage(QWidget):
                                                   lane_missing=result['target'] is None)
                         self.segmentation.display(result['segmentation'], '도로·실선·점선을 색으로 표시')
                         error = result['error_px']
-                        caption = '차선 미검출 · 주행 시작 상태에서는 중앙 조향 / 전진 PWM 150' if error is None else f'주행 오차 {error:+.1f}px · 목표 {result["target"]:+.1f}°'
+                        status = result.get('status', '차선 추적')
+                        line = result.get('line_kind', 'RIGHT')
+                        detail = '직전 조향 유지' if error is None else f'측정−기준 {error:+.1f}px'
+                        caption = f'{line} · {status} · {detail} · 목표 {result["target"]:+.1f}°'
                         self.scan.display(result['overlay'], caption)
             except Exception as exc:
                 self.stop_inference()
@@ -413,7 +420,7 @@ class ScaleCarPage(QWidget):
         self.operation = 'frame'
         self.future_generation = self.generation
         self.future = self.executor.submit(self.pipeline.process, sample[1], sample[0])
-        self.inference_status.setText('차선 추론 중 · 오른쪽 실선 기준')
+        self.inference_status.setText('osy-260809 · BEV / 초록 검증 / 중앙 점선 폴백')
 
     def shutdown(self):
         if not self.closing:

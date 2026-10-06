@@ -8,7 +8,7 @@ from threading import Event
 import numpy as np
 from PySide6.QtWidgets import QApplication
 from session_2.studio import Studio
-from session_2.driving import MotorControl
+from session_2.competition_driving import MotorControl
 
 
 class SerialRecorder:
@@ -87,7 +87,7 @@ def test_scale_car_real_serial_path_requires_arm_and_stops_on_navigation():
         page.calibrate_button.click()
         assert page.motor.snapshot().center == 485
         page.arm_button.click()
-        pump(app, window, lambda: any(int(data.split()[1]) > 0 for data in serial.writes))
+        pump(app, window, lambda: page.motor.snapshot().p == 65.)
         assert page.segmentation.pixmap is not None and page.scan.pixmap is not None
         state = page.motor.snapshot()
         assert state.armed and state.p == 65. and state.sent_command
@@ -159,7 +159,7 @@ def test_busy_port_and_missing_connections_do_not_open_or_arm():
         cleanup(app, window)
 
 
-def test_fresh_no_lane_result_drives_slowly_but_camera_loss_stops():
+def test_fresh_lane_hold_keeps_last_angle_but_camera_loss_stops():
     app, window = make_window()
     page = window.scale_car
     assert page.throttle.maximum() == 230 and page.throttle.value() == 150 and page.throttle.minimum() == 150
@@ -167,7 +167,8 @@ def test_fresh_no_lane_result_drives_slowly_but_camera_loss_stops():
 
     class NoLane:
         def process(self, frame, stamp):
-            return dict(stamp=stamp, target=None, error_px=None,
+            return dict(stamp=stamp, target=12., error_px=None,
+                        status='CENTER LOST HOLD', line_kind='CENTER',
                         segmentation=frame, overlay=frame)
 
     page.pipeline = NoLane()
@@ -180,8 +181,8 @@ def test_fresh_no_lane_result_drives_slowly_but_camera_loss_stops():
         page.calibrate_button.click()
         page.arm_button.click()
         pump(app, window, lambda: page.motor.snapshot().drive == 150)
-        assert page.motor.snapshot().lane_missing and page.motor.snapshot().target == 0
-        assert any(data == b'0 150\n' for data in serial.writes)
+        assert not page.motor.snapshot().lane_missing and page.motor.snapshot().target == 12
+        assert any(int(data.split()[0]) > 0 and int(data.split()[1]) == 150 for data in serial.writes)
         assert all(0 <= int(data.split()[1]) <= 150 for data in serial.writes)
         window.live.cameras[0].error = '카메라 끊김'
         pump(app, window, lambda: not page.motor.snapshot().armed and serial.writes[-1] == b'0 0\n', feed=False)
