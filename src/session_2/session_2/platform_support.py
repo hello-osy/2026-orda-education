@@ -1,6 +1,52 @@
 """OS별 장치 선택과 Qt 실행 준비."""
 import os
 import sys
+from pathlib import Path
+
+
+def prepare_learning_config(workspace=None):
+    """Ultralytics import 전에 설정 경로를 생성한다. 사용자 환경변수는 유지한다."""
+    workspace = Path(workspace) if workspace is not None else Path(__file__).resolve().parents[3] / 'workspace' / 'session_2'
+    paths = {}
+    for name, folder in [('YOLO_CONFIG_DIR', '.ultralytics'), ('MPLCONFIGDIR', '.matplotlib')]:
+        path = Path(os.environ.get(name) or workspace / folder).expanduser().resolve()
+        path.mkdir(parents=True, exist_ok=True)
+        os.environ[name] = str(path)
+        paths[name] = str(path)
+    # Ubuntu의 .pth가 시스템 mpl_toolkits를 미리 로드할 수 있다.
+    # 실제 선택된 Matplotlib과 같은 설치 위치의 확장을 우선한다.
+    import importlib.util
+    spec = importlib.util.find_spec('matplotlib')
+    if spec is not None and spec.origin:
+        toolkit = Path(spec.origin).parent.parent / 'mpl_toolkits'
+        if toolkit.is_dir():
+            import mpl_toolkits
+            mpl_toolkits.__path__ = [str(toolkit), *[p for p in mpl_toolkits.__path__ if p != str(toolkit)]]
+    return paths
+
+
+def default_camera_indices(sysfs_root='/sys/class/video4linux'):
+    """Linux UVC 기본 영상 노드를 선택하고 메타데이터 노드는 제외한다.
+
+    USB 재연결 후 번호에 빈 곳이 생길 수 있다. 사용자가 지정한
+    --cameras는 이 기본값보다 우선하며, 다른 OS의 열거 방식은 유지한다.
+    """
+    if not sys.platform.startswith('linux'):
+        return [0, 1]
+    indices = []
+    for node in Path(sysfs_root).glob('video*'):
+        try:
+            index = int(node.name[5:])
+            if 0 <= index <= 15 and (node / 'index').read_text().strip() == '0':
+                indices.append(index)
+        except (OSError, ValueError):
+            continue
+    indices.sort()
+    if len(indices) >= 2:
+        return indices[:2]
+    if indices:
+        return [indices[0], next(i for i in range(16) if i != indices[0])]
+    return [0, 1]
 
 
 def camera_backend(cv2):

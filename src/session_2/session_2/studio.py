@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (QApplication, QButtonGroup, QComboBox,
 from .bagio import BagArchive, CAMERA_TOPICS, IMAGE_TYPES, Recorder, SCAN_TOPIC, SCAN_TYPE
 from .learning import Detector, validate_dataset
 from .viewer import ScanCanvas, Viewer
+from .platform_support import default_camera_indices, prepare_learning_config
 
 ROOT = Path(__file__).resolve().parents[3]
 WORKSPACE = ROOT/'workspace'/'session_2'
@@ -665,8 +666,8 @@ class Studio(QMainWindow):
         env.insert('PYTHONPATH', os.pathsep.join([str(ROOT/'src'/'session_2'), str(ROOT/'src'/'session_1')]))
         env.insert('PYTHONUTF8', '1')
         env.insert('PYTHONIOENCODING', 'utf-8')
-        env.insert('YOLO_CONFIG_DIR',str(WORKSPACE/'.ultralytics'))
-        env.insert('MPLCONFIGDIR',str(WORKSPACE/'.matplotlib'))
+        for name, path in prepare_learning_config(WORKSPACE).items():
+            env.insert(name, path)
         self.job.setProcessEnvironment(env)
         self.job.setWorkingDirectory(str(ROOT))
         self.job.setProcessChannelMode(QProcess.MergedChannels)
@@ -863,7 +864,7 @@ class Studio(QMainWindow):
 
 def main():
     parser = argparse.ArgumentParser(description='ORDA Session 2 GUI 수업')
-    parser.add_argument('--cameras',nargs=2,type=int,default=[0,1])
+    parser.add_argument('--cameras',nargs=2,type=int,default=default_camera_indices())
     parser.add_argument('--port',default='')
     parser.add_argument('--width',type=int,default=320)
     parser.add_argument('--height',type=int,default=240)
@@ -883,8 +884,7 @@ def main():
     if min(args.width,args.height,args.fps)<=0 or not .5<=args.range<=16:
         parser.error('해상도/FPS는 양수, 반경은 0.5~16m이어야 합니다.')
     WORKSPACE.mkdir(parents=True,exist_ok=True)
-    os.environ.setdefault('YOLO_CONFIG_DIR',str(WORKSPACE/'.ultralytics'))
-    os.environ.setdefault('MPLCONFIGDIR',str(WORKSPACE/'.matplotlib'))
+    prepare_learning_config(WORKSPACE)
     from .platform_support import prepare_qt
     prepare_qt()
     app = QApplication.instance() or QApplication(sys.argv[:1])

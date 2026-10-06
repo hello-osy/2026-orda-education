@@ -1,4 +1,4 @@
-"""제한 시간 동안 실수신 확인. 카메라 0/1 및 명시한 A1 포트만 사용."""
+"""제한 시간 동안 실수신 확인. 자동/명시한 카메라와 명시한 A1 포트만 사용."""
 import argparse
 import json
 from pathlib import Path
@@ -8,12 +8,13 @@ import time
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from session_2.sensors import camera_worker, lidar_worker
 from session_2.viewer import SensorProcess
+from session_2.platform_support import default_camera_indices
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--port')
-    parser.add_argument('--cameras', nargs='*', type=int, default=[0, 1])
+    parser.add_argument('--cameras', nargs='*', type=int, default=default_camera_indices())
     parser.add_argument('--seconds', type=float, default=10)
     parser.add_argument('--width', type=int, default=640)
     parser.add_argument('--height', type=int, default=480)

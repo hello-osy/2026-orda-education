@@ -5,6 +5,7 @@ import math
 
 import yaml
 from .inference_runtime import inference_guard
+from .platform_support import prepare_learning_config
 
 
 def choose_device(requested='auto'):
@@ -93,6 +94,7 @@ def validate_dataset(path):
 
 class Detector:
     def __init__(self, weights, device='auto'):
+        prepare_learning_config()
         from ultralytics import YOLO
         path = Path(weights).expanduser()
         if not path.is_file() or path.suffix != '.pt':
@@ -115,6 +117,7 @@ class Detector:
 
 
 def train(data, output, model='yolov8n.pt', epochs=30, batch=4, imgsz=640, device='auto'):
+    prepare_learning_config()
     from ultralytics import YOLO
     output = Path(output)
     config, summary = validate_dataset(data)
@@ -126,7 +129,7 @@ def train(data, output, model='yolov8n.pt', epochs=30, batch=4, imgsz=640, devic
     # AMP는 CPU/MPS에서 끄고, DataLoader는 macOS 프로세스 충돌을 피하도록 worker=0 (Windows에서도 추가 프로세스 없음).
     yolo = YOLO(model, task='detect')
     yolo.train(data=str(normalized), epochs=epochs, batch=batch, imgsz=imgsz, device=selected,
-               workers=0, amp=False, project=str(output), name='model', exist_ok=False,
+               workers=0, amp=False, project=str(output), name='training', exist_ok=False,
                plots=False, cache=False, seed=0)
     best = Path(yolo.trainer.best)
     if not best.is_file():

@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout, QLabel, QMainWindow, QPushButton, QSizePolicy, QSpinBox, QVBoxLayout, QWidget,
 )
 from .sensors import camera_worker, lidar_worker, scan_xy, serial_ports, suggested_port
+from .platform_support import default_camera_indices
 
 
 class SensorProcess:
@@ -355,7 +356,7 @@ class Viewer(QMainWindow):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--cameras', type=int, nargs=2, default=[0, 1], metavar=('LEFT', 'RIGHT'))
+    parser.add_argument('--cameras', type=int, nargs=2, default=default_camera_indices(), metavar=('LEFT', 'RIGHT'))
     parser.add_argument('--port', default='')
     parser.add_argument('--width', type=int, default=640)
     parser.add_argument('--height', type=int, default=480)

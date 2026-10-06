@@ -6,12 +6,25 @@
 
 ## 실행
 
-README의 ROS 및 공통 개발환경과 Session 2 추가 의존성을 설치한 상태를 전제로 합니다. 기존 프로젝트 가상환경을 사용합니다. 프로젝트 루트에서 실행합니다.
+README의 ROS 및 공통 개발환경 설치를 마쳐 프로젝트에 `.venv`가 있는 상태에서 시작합니다. **기존 가상환경을 그대로 사용합니다.** 아래 추가 설치는 Session 2 패키지와 NumPy 호환 학습 라이브러리를 `.venv`에 보완합니다. 가상환경 재생성이나 시스템 Python 패키지 변경은 필요하지 않습니다. `README.md`와 `scripts/`가 있는 프로젝트 루트에서 순서대로 실행하세요.
 
 ```bash
-# 처음 한 번만 추가 의존성 설치
+# 1. 처음 한 번 설치 (이전 설치에서 학습 오류가 났다면 같은 명령을 다시 실행)
 .venv/bin/python -m pip install -r src/session_2/requirements.txt
+# 2. 학습 라이브러리 검사: 마지막에 'Session 2 학습 라이브러리 OK' 확인
+.venv/bin/python src/session_2/scripts/check_install.py
+# 3. 실행 (다음부터는 이 명령만 실행)
 bash scripts/session_2.sh
+```
+
+Ubuntu 24.04의 README 가상환경은 `--system-site-packages`로 시스템 패키지도 볼 수 있습니다. 이전 설치 조건은 NumPy 1용 시스템 Matplotlib·SciPy를 그대로 사용해 NumPy 2에서 `numpy.core.multiarray failed to import`를 일으킬 수 있었습니다. 위 추가 설치는 Matplotlib·ContourPy·SciPy의 NumPy 2 호환 버전을 가상환경에 설치하여 이 충돌을 방지합니다. NumPy를 수동으로 내리거나 `sudo pip`를 실행하지 마세요. 설정 폴더도 실행 전에 자동 생성됩니다. 설치 후 열려 있던 Session 2 창은 종료하고 다시 실행하세요.
+
+Windows 네이티브의 기존 가상환경에서는 PowerShell에서 같은 순서로 실행합니다(WSL은 위 Ubuntu 명령 사용).
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r src/session_2/requirements.txt
+.\.venv\Scripts\python.exe src/session_2/scripts/check_install.py
+.\scripts\session_2.cmd
 ```
 
 ROS 데몬이나 colcon 빌드 없이 실행합니다. 카메라 기본 설정은 USB 연결 부담을 줄인 320×240, 초당 10장입니다. 필요하면 실행할 때 지정합니다.
@@ -43,6 +56,20 @@ Windows 네이티브 실행은 `.venv\Scripts\python.exe`, macOS·Ubuntu·WSL은
 macOS에서 `not authorized to capture video`가 나오면 시스템 설정 → 개인정보 보호 및 보안 → 카메라에서 실제 실행한 앱(터미널, VS Code, Codex 등)을 허용하세요. 처음 뜨는 권한 창을 허용한 뒤 `연결 시작`을 다시 누르세요. 계속 실패하면 실행 앱을 완전히 종료하고 다시 실행하세요. 다른 앱에서 허용한 권한이 현재 실행 앱에도 적용되는 것은 아닙니다.
 
 카메라 번호에는 내장 카메라도 포함됩니다. `out device of bound (0-0): 1`은 현재 카메라 번호 0만 인식되고 있다는 뜻입니다. 카메라 2의 USB 연결과 다른 앱의 카메라 사용 여부를 확인하세요. `Monospace` 글꼴 대신 시스템에 설치된 고정폭 글꼴을 자동 선택합니다.
+
+Ubuntu에서는 실행 시 `/sys/class/video4linux`의 기본 영상 노드(index 0)를 찾아 카메라 번호를 자동 선택합니다. C920의 메타데이터 노드(index 1)는 제외합니다. USB 재연결에 따라 실제 영상 장치가 `0`, `3`처럼 떨어진 번호일 수 있으므로 항상 `0`, `1`을 지정하지 마세요. 장치가 두 개 미만이면 남은 칸은 수동 설정용 번호이며, 연결된 카메라가 있다는 의미는 아닙니다. 내장 카메라를 포함해 세 대 이상이면 사용할 번호를 직접 지정하세요. 재연결 뒤에는 프로그램을 다시 실행하거나 화면에서 번호를 바꾸세요.
+
+2026-10-06 Ubuntu 장치 확인에서는 C920 두 대가 `/dev/video0`, `/dev/video3`이었으며, 같은 USB 허브에서 320×240·10 FPS로 두 대 동시 수신을 확인했습니다. 이 연결 상태에서 명시적으로 실행하려면 다음을 사용합니다(재연결하면 번호가 바뀔 수 있음).
+
+```bash
+bash scripts/session_2.sh --cameras 0 3 --width 320 --height 240 --fps 10
+```
+
+화면 프로그램을 종료한 뒤 아래 명령으로 현재 자동 선택된 두 카메라를 검사할 수 있습니다. 두 항목 모두 `errors: []`, `last_age_s < 2`, `forced_shutdown: false`인지 확인합니다.
+
+```bash
+.venv/bin/python src/session_2/scripts/check_sensors.py --width 320 --height 240 --fps 10 --seconds 30
+```
 
 ## 1. ROS2 bag 녹화 & 재생
 
