@@ -43,7 +43,8 @@ def make_window():
                                        height=240, fps=10, autostart=False, bag=None))
     window.live.timer.stop()
     window.select_stage(3)
-    window.live.cameras[0].worker = SimpleNamespace(stopping=None)
+    for panel in window.live.cameras:
+        panel.worker = SimpleNamespace(stopping=None)
     return app, window
 
 
@@ -54,6 +55,8 @@ def pump(app, window, predicate, seconds=4, feed=True):
             stamp = time.monotonic()
             window.live.cameras[0].last = stamp
             window.receive_live_frame(0, stamp, np.zeros((32, 48, 3), np.uint8))
+            window.live.cameras[1].last = stamp
+            window.receive_live_frame(1, stamp, np.full((32, 48, 3), 99, np.uint8))
         app.processEvents()
         if predicate():
             return
@@ -110,6 +113,7 @@ def test_camera_loss_stops_motor_and_slow_yolo_does_not_block_lane_inference():
 
     class SlowYolo:
         def predict(self, frame, confidence):
+            assert int(frame[0, 0, 0]) == 99
             release.wait(4)
             return frame, 1, 1.
 
@@ -126,6 +130,7 @@ def test_camera_loss_stops_motor_and_slow_yolo_does_not_block_lane_inference():
         window.live.cameras[0].worker = None
         pump(app, window, lambda: not page.motor.snapshot().armed and serial.writes[-1] == b'0 0\n', feed=False)
         assert page.segmentation.pixmap is None
+        window.live.cameras[1].worker = None
         release.set()
         pump(app, window, lambda: page.yolo_future is None, feed=False)
         assert page.yolo_picture.pixmap is None

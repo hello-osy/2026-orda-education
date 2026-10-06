@@ -22,6 +22,11 @@ def publish(out, kind, payload):
             pass
 
 
+# C920 두 번째 장치 초기화 시 기존 스트림이 2초 넘게 멈췄다가 회복될 수 있다.
+# 연결 유지 유예이며, 추론/모터 제어의 프레임 신선도 제한과는 별개다.
+CAMERA_RECOVERY_TIMEOUT = 10.0
+
+
 def camera_worker(out, stop, index, width, height, fps):
     import cv2
     cap = None
@@ -37,12 +42,14 @@ def camera_worker(out, stop, index, width, height, fps):
         last_good = time.monotonic()
         while not stop.is_set():
             ok, frame = cap.read()
-            if not ok:
-                # AVFoundation은 장치 초기화 직후 잠시 빈 프레임을 반환할 수 있다.
-                if time.monotonic() - last_good < 2:
+            if stop.is_set():
+                break
+            if not ok or frame is None or frame.size == 0:
+                # 다른 USB 카메라 초기화 중 일시 중단도 재오픈 없이 기다린다.
+                if time.monotonic() - last_good < CAMERA_RECOVERY_TIMEOUT:
                     stop.wait(.05)
                     continue
-                raise RuntimeError('영상 수신 실패: USB 연결 / 허브 전원 확인 후 다시 시작')
+                raise RuntimeError('10초 동안 영상 없음: USB 연결 / 허브 전원 / 다른 앱의 카메라 사용 확인 후 다시 시작')
             last_good = time.monotonic()
             publish(out, 'data', frame)
     except Exception as exc:
@@ -79,7 +86,11 @@ def lidar_worker(out, stop, port, baudrate):
 
 
 def scan_xy(scan, limit_m, rotation_deg=0):
-    """A1 각도 0도를 화면 위쪽, +90도를 오른쪽으로 표시. mm -> m."""
+    """A1 원시 각도를 화면 좌표로 변환. mm -> m.
+
+    대회 드라이버의 ROS 각도는 180° − 원시 각도이며,
+    대회 화면의 (sin(ROS 각도), cos(ROS 각도))와 동일하다.
+    원시 0°는 앞, ROS 0°는 뒤이므로 두 각도를 혼동하지 않는다."""
     scan = np.asarray(scan, dtype=float).reshape(-1, 3)
     valid = np.isfinite(scan).all(axis=1) & (scan[:, 0] > 0)
     valid &= (scan[:, 2] > 0) & (scan[:, 2] <= limit_m * 1000)

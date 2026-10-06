@@ -57,7 +57,7 @@ class ScanCanvas(QWidget):
         super().__init__()
         self.setMinimumSize(320, 300)
         self.scan = np.empty((0, 3))
-        self.limit = 6.0
+        self.limit = 2.0
         self.rotation = 0.0
         self.stale = True
 
@@ -75,8 +75,10 @@ class ScanCanvas(QWidget):
         painter.drawLine(QPointF(cx - radius, cy), QPointF(cx + radius, cy))
         painter.drawLine(QPointF(cx, cy - radius), QPointF(cx, cy + radius))
         painter.setPen(QColor('#c5d4e8'))
-        painter.drawText(int(cx - 30), 20, '0° / 앞')
-        painter.drawText(self.width() - 38, int(cy - 5), '90°')
+        painter.drawText(int(cx - 38), 20, '±180° / 앞')
+        painter.drawText(self.width() - 65, int(cy - 5), '+90° / 우')
+        painter.drawText(6, int(cy - 5), '−90° / 좌')
+        painter.drawText(int(cx - 25), self.height() - 30, '0° / 뒤')
         painter.setPen(QPen(QColor('#65748b' if self.stale else '#42e2b8'), 3))
         for x, y in scan_xy(self.scan, self.limit, self.rotation):
             painter.drawPoint(QPointF(cx + x * radius / self.limit, cy + y * radius / self.limit))
@@ -164,6 +166,12 @@ class SensorPanel(QGroupBox):
         if self.is_lidar:
             self.display.stale = not active or age > 2
             self.display.update()
+        elif active and age > 2:
+            self.display.clear()
+            self.display.setText('연결 중…' if self.last is None else '영상 수신 일시 중단 · 회복 대기 중…')
+        elif not active and self.last is not None:
+            self.display.clear()
+            self.display.setText('카메라 중지됨 · 다시 연결하세요')
         elif self.pixmap is not None:
             self.display.setPixmap(self.pixmap.scaled(self.display.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation))
         if self.error:
@@ -173,7 +181,7 @@ class SensorPanel(QGroupBox):
         elif self.worker and self.worker.stopping is not None:
             self.status.setText('장치 정리 중…')
         elif not active:
-            self.status.setText('중지됨 · 마지막 수신 화면' if self.last else '연결 대기')
+            self.status.setText('중지됨' if self.last else '연결 대기')
         elif self.last is None:
             self.status.setText('연결 중… 권한 / 장치 번호 / 포트 확인')
         else:
@@ -181,7 +189,7 @@ class SensorPanel(QGroupBox):
             rate = (len(self.timestamps) - 1) / span if span > 0 else 0
             detail = f'{len(self.display.scan)} points' if self.is_lidar else f'{self.pixmap.width()}×{self.pixmap.height()}'
             unit = 'Hz' if self.is_lidar else 'FPS'
-            state = '수신 끊김' if age > 2 else '수신 중'
+            state = '수신 지연 · 회복 대기' if age > 2 else '수신 중'
             self.status.setText(f'{state} · {rate:.1f} {unit} · {detail}\n마지막 수신 {age:.1f}초 전')
         self.status.setToolTip(self.status.text())
 
@@ -247,10 +255,12 @@ class Viewer(QMainWindow):
         self.lidar.settings.addRow('시리얼 포트', self.port)
         self.range = QDoubleSpinBox()
         self.range.setRange(0.5, 16)
+        self.range.setSingleStep(0.5)
+        self.range.setDecimals(1)
         self.range.setValue(args.range)
         self.range.setSuffix(' m')
         self.range.valueChanged.connect(self.change_range)
-        self.lidar.settings.addRow('표시 반경', self.range)
+        self.lidar.settings.addRow('최대 표시 거리', self.range)
         self.rotation = QSpinBox()
         self.rotation.setRange(-180, 180)
         self.rotation.setSuffix('°')
@@ -350,7 +360,7 @@ def main():
     parser.add_argument('--width', type=int, default=640)
     parser.add_argument('--height', type=int, default=480)
     parser.add_argument('--fps', type=int, default=15)
-    parser.add_argument('--range', type=float, default=6.0)
+    parser.add_argument('--range', type=float, default=2.0)
     parser.add_argument('--autostart', action='store_true')
     parser.add_argument('--list-ports', action='store_true')
     args = parser.parse_args()

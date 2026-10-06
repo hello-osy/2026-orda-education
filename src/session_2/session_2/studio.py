@@ -13,7 +13,7 @@ import time
 import numpy as np
 from PySide6.QtCore import QProcess, QProcessEnvironment, Qt, QTimer, QUrl
 from PySide6.QtGui import QDesktopServices, QImage, QPixmap
-from PySide6.QtWidgets import (QApplication, QButtonGroup, QCheckBox, QComboBox,
+from PySide6.QtWidgets import (QApplication, QButtonGroup, QComboBox,
     QFileDialog, QGroupBox, QHBoxLayout, QLabel, QLineEdit, QMainWindow,
     QPlainTextEdit, QPushButton, QScrollArea, QSizePolicy, QSlider, QStackedWidget, QVBoxLayout, QWidget)
 
@@ -41,6 +41,8 @@ STAGES = [
     ('4. 스케일카 굴려보기', '', ''),
 ]
 # 수업용 고정 설정: 화면에서 여러 값을 고를 필요가 없다.
+YOLO_CAMERA_INDEX = 1  # 화면의 카메라 2. USB 장치 번호는 사용자가 별도로 지정합니다.
+
 TRAINING = {'model': 'yolov8n.pt', 'epochs': '30', 'batch': '4', 'imgsz': '640', 'device': 'auto'}
 
 
@@ -221,10 +223,18 @@ class Studio(QMainWindow):
         self.bag_scan_status = note('기록 없음')
         scan_layout.addWidget(self.bag_scan, 1)
         scan_layout.addWidget(self.bag_scan_status)
+        self.bag_scan_convention = QComboBox()
+        self.bag_scan_convention.addItem('각도 기준: 대회 코드 / SLLIDAR', 0)
+        self.bag_scan_convention.addItem('각도 기준: 이전 Session 2 녹화', 180)
+        self.bag_scan_convention.setToolTip('이번 수정 전에 Session 2에서 녹화한 bag은 이전 Session 2 녹화를 선택하세요.')
+        self.bag_scan_convention.currentIndexChanged.connect(self.change_bag_scan_convention)
+        scan_layout.addWidget(self.bag_scan_convention)
         self.sensor_displays = []
-        for field in (self.live.range, self.live.rotation):
+        for field in (self.live.rotation,):
             self.live.lidar.settings.labelForField(field).hide()
             field.hide()
+        self.bag_scan.limit = self.live.range.value()
+        self.live.range.valueChanged.connect(self.change_bag_scan_range)
         self.live.lidar.settings.labelForField(self.live.port).setText('연결 장치')
         for panel in self.live.cameras:
             panel.settings.labelForField(panel.index).setText('카메라 번호')
@@ -246,7 +256,7 @@ class Studio(QMainWindow):
             inner.addWidget(panel.status)
             settings = QWidget()
             settings.setLayout(panel.settings)
-            settings.setFixedHeight(48)
+            settings.setFixedHeight(78 if panel.is_lidar else 48)
             inner.addWidget(settings)
             inner.addWidget(panel.button)
             panel.button.setText('연결 시작')
@@ -288,23 +298,24 @@ class Studio(QMainWindow):
         layout.addWidget(self.recording_controls)
         self.add_page(page)
 
+    def change_bag_scan_range(self, value):
+        self.bag_scan.limit = value
+        self.bag_scan.update()
+
+    def change_bag_scan_convention(self, _index):
+        self.bag_scan.rotation = self.bag_scan_convention.currentData()
+        self.bag_scan.update()
+
     def build_learning_page(self):
         page = QWidget()
         layout = QHBoxLayout(page)
         self.capture_box = QGroupBox('사진 캡처하기')
         capture = QVBoxLayout(self.capture_box)
-        capture.addWidget(note('녹화한 영상에서 학습에 쓸 사진을 꺼냅니다.\n5장면마다 사진 1장을 저장합니다.'))
+        capture.addWidget(note('녹화한 카메라 2 영상에서 학습에 쓸 사진을 꺼냅니다.\n5장면마다 사진 1장을 저장합니다.'))
         capture.addWidget(button('bag 파일 열기', self.pick_bag))
         self.extract_bag = note('선택한 기록 없음')
         capture.addWidget(self.extract_bag)
-        self.extract_checks = []
-        camera_choices = QHBoxLayout()
-        for title in ('카메라 1', '카메라 2'):
-            check = QCheckBox(title)
-            check.setChecked(True)
-            camera_choices.addWidget(check)
-            self.extract_checks.append(check)
-        capture.addLayout(camera_choices)
+        capture.addWidget(note('학습용 사진은 카메라 2 기록에서만 수집합니다.'))
         self.extract_button = button('사진 캡처하기', self.extract)
         capture_actions = QHBoxLayout()
         capture_actions.addWidget(self.extract_button)
@@ -349,7 +360,7 @@ class Studio(QMainWindow):
 
         self.infer_box = QGroupBox('YOLOv8 모델 추론')
         inference = QVBoxLayout(self.infer_box)
-        inference.addWidget(note('실시간 카메라 영상에서 물체를 찾습니다. 카메라를 고르고 물체 찾기 시작을 누르세요.'))
+        inference.addWidget(note('카메라 2 영상에서 물체를 찾습니다. 물체 찾기 시작을 누르세요.'))
         self.weights = QLineEdit()
         self.weights.setPlaceholderText('학습 결과 best.pt · 학습 후 자동 선택')
         inference.addWidget(self.weights)
@@ -359,16 +370,13 @@ class Studio(QMainWindow):
         row.addWidget(self.load_model)
         row.addWidget(button('물체 찾기 중지', self.stop_inference))
         inference.addLayout(row)
-        self.infer_camera = QComboBox()
-        self.infer_camera.addItems(['카메라 1 영상', '카메라 2 영상'])
-        self.infer_camera.currentIndexChanged.connect(self.change_live_camera)
-        inference.addWidget(self.infer_camera)
+        inference.addWidget(note('추론 입력: 카메라 2 (고정)'))
         self.infer_picture = Picture('물체 찾기 결과')
-        self.infer_picture.clear('실시간 카메라와 학습한 모델을 선택하세요')
+        self.infer_picture.clear('카메라 2를 연결하고 학습한 모델을 선택하세요')
         inference.addWidget(self.infer_picture, 1)
-        self.infer_connect = button('카메라 연결', self.toggle_infer_camera)
+        self.infer_connect = button('카메라 2 연결', self.toggle_infer_camera)
         inference.addWidget(self.infer_connect)
-        self.infer_status = note('카메라 연결 대기 · 장치 번호는 1번 화면에서 설정합니다.')
+        self.infer_status = note('카메라 2 연결 대기 · 장치 번호는 1번 화면에서 설정합니다.')
         inference.addWidget(self.infer_status)
         layout.addWidget(self.infer_box, 1)
         self.add_page(page)
@@ -393,7 +401,7 @@ class Studio(QMainWindow):
         self.live_frames[index] = (stamp, frame.copy())
 
     def live_sample(self):
-        index = self.infer_camera.currentIndex()
+        index = YOLO_CAMERA_INDEX
         panel = self.live.cameras[index]
         sample = self.live_frames[index]
         if (panel.worker is None or panel.worker.stopping is not None or panel.error or
@@ -403,24 +411,17 @@ class Studio(QMainWindow):
         return sample
 
     def ensure_live_camera(self):
-        panel = self.live.cameras[self.infer_camera.currentIndex()]
+        panel = self.live.cameras[YOLO_CAMERA_INDEX]
         if panel.worker is None:
             self.live.toggle_camera(panel)
 
     def toggle_infer_camera(self):
         self.live_generation += 1
         self.last_inferred = None
-        panel = self.live.cameras[self.infer_camera.currentIndex()]
-        self.live_frames[self.infer_camera.currentIndex()] = None
+        panel = self.live.cameras[YOLO_CAMERA_INDEX]
+        self.live_frames[YOLO_CAMERA_INDEX] = None
         self.live.toggle_camera(panel)
         self.infer_picture.clear('카메라 연결 상태를 확인하세요')
-
-    def change_live_camera(self, *_):
-        self.live_generation += 1
-        self.last_inferred = None
-        self.infer_picture.clear('선택한 카메라 수신 대기')
-        if self.infer_enabled:
-            self.ensure_live_camera()
 
     def stop_inference(self):
         self.infer_enabled = False
@@ -431,8 +432,8 @@ class Studio(QMainWindow):
     def tick_live_inference(self):
         if not self.inference_active():
             return
-        panel = self.live.cameras[self.infer_camera.currentIndex()]
-        self.infer_connect.setText('카메라 연결' if panel.worker is None else '카메라 중지')
+        panel = self.live.cameras[YOLO_CAMERA_INDEX]
+        self.infer_connect.setText('카메라 2 연결' if panel.worker is None else '카메라 2 중지')
         sample = self.live_sample()
         if sample is None:
             self.infer_status.setText(panel.error or '실시간 영상 없음 · 카메라 연결과 권한을 확인하세요.')
@@ -447,13 +448,13 @@ class Studio(QMainWindow):
             self.infer_status.setText('학습 중 · 물체 찾기 대기')
             return
         self.infer_status.setText('실시간 물체 찾는 중 · 최신 영상부터 처리합니다.')
-        key = (self.infer_camera.currentIndex(), stamp)
+        key = (YOLO_CAMERA_INDEX, stamp)
         if self.future is not None or self.last_inferred == key:
             return
         self.last_inferred = key
         detector = self.detector
         generation = self.live_generation
-        index = self.infer_camera.currentIndex()
+        index = YOLO_CAMERA_INDEX
         self.submit('live', lambda: (generation, index, stamp, detector.predict(frame, .25)))
 
     def show_live(self):
@@ -630,11 +631,11 @@ class Studio(QMainWindow):
         if not self.archive:
             self.notice.setText('bag 파일 열기를 눌러 녹화한 기록을 먼저 선택하세요.')
             return
-        topics = list(dict.fromkeys(combo.currentData() for combo,check in zip(self.topic_boxes,self.extract_checks)
-                      if check.isChecked() and combo.currentData()))
-        if not topics:
-            self.notice.setText('추출할 카메라 기록을 선택하세요.')
+        topic = self.topic_boxes[YOLO_CAMERA_INDEX].currentData()
+        if not topic or topic == self.topic_boxes[0].currentData():
+            self.notice.setText('카메라 2 기록이 필요합니다. 1번 화면에서 카메라 2 기록을 선택하세요.')
             return
+        topics = [topic]
         output = new_path('images')
         self.start_job('extract',['--bag',str(self.archive.path),'--output',str(output),'--topics',*topics,'--stride','5'],output)
 
@@ -756,7 +757,7 @@ class Studio(QMainWindow):
                 self.request_frame()
             elif operation == 'live':
                 generation, index, stamp, prediction = result
-                if generation == self.live_generation and index == self.infer_camera.currentIndex() and self.infer_enabled and self.live_sample() is not None and time.monotonic() - stamp < 2:
+                if generation == self.live_generation and index == YOLO_CAMERA_INDEX and self.infer_enabled and self.live_sample() is not None and time.monotonic() - stamp < 2:
                     frame, count, ms = prediction
                     self.infer_picture.display(frame, f'실시간 · {count}개 물체 · {ms:.0f} ms')
             elif operation == 'validate':
@@ -867,7 +868,7 @@ def main():
     parser.add_argument('--width',type=int,default=320)
     parser.add_argument('--height',type=int,default=240)
     parser.add_argument('--fps',type=int,default=10)
-    parser.add_argument('--range',type=float,default=6.)
+    parser.add_argument('--range',type=float,default=2.)
     parser.add_argument('--autostart',action='store_true')
     parser.add_argument('--bag')
     parser.add_argument('--list-ports',action='store_true')

@@ -85,6 +85,15 @@ def test_unified_pages_recording_replay_inference_and_fixed_training(tmp_path):
         window.data_yaml.setText(str(yaml))
         jobs = []
         window.start_job = lambda *args: jobs.append(args)
+        window.extract_button.click()
+        capture_arguments = jobs.pop()[1]
+        assert capture_arguments[capture_arguments.index('--topics')+1:capture_arguments.index('--stride')] == ['/camera/low/image_raw']
+        # 카메라 2가 없으면 카메라 1로 대체하지 않는다.
+        camera2_index = window.topic_boxes[1].currentIndex()
+        window.topic_boxes[1].setCurrentIndex(0)
+        window.extract_button.click()
+        assert not jobs and '카메라 2 기록이 필요' in window.notice.text()
+        window.topic_boxes[1].setCurrentIndex(camera2_index)
         window.train_button.click()
         arguments = jobs[0][1]
         for key, value in TRAINING.items():
@@ -205,13 +214,16 @@ def test_live_inference_uses_latest_camera_frame_and_discards_old_results(tmp_pa
         window.detector = Detector()
         window.infer_enabled = True
         assert window.archive is None
-        feed(0, 11)
+        feed(0, 200)
+        window.tick()
+        assert window.future is None
+        feed(1, 11)
         window.tick()
         assert window.operation == 'live'
-        feed(0, 22)
-        feed(0, 33)
-        # Switch while the old camera is still being processed.
-        window.infer_camera.setCurrentIndex(1)
+        feed(1, 22)
+        feed(1, 33)
+        # Camera 1 must never replace the latest camera 2 input.
+        feed(0, 201)
         feed(1, 99)
         release.set()
         wait_until(app, lambda: window.future is None and pixels == [11, 99])
@@ -234,3 +246,28 @@ def test_live_inference_uses_latest_camera_frame_and_discards_old_results(tmp_pa
             panel.worker = None
         window.close()
         wait_until(app, lambda: not window.timer.isActive())
+
+
+def test_camera_panel_hides_stale_image_until_recovery():
+    from types import SimpleNamespace
+    from session_2.viewer import SensorPanel
+    app = QApplication.instance() or QApplication([])
+    panel = SensorPanel('카메라')
+    now = time.monotonic()
+    messages = [('data', now-3, np.zeros((8, 8, 3), np.uint8))]
+
+    def drain():
+        batch = messages[:]
+        messages.clear()
+        return batch
+
+    panel.worker = SimpleNamespace(drain=drain, finished=lambda: False, stopping=None)
+    panel.tick()
+    assert '회복 대기' in panel.display.text()
+    assert panel.display.pixmap().isNull()
+    messages.append(('data', time.monotonic(), np.ones((8, 8, 3), np.uint8)))
+    panel.tick()
+    assert not panel.display.pixmap().isNull()
+    assert '수신 중' in panel.status.text()
+    panel.worker = None
+    panel.close()

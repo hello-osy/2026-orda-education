@@ -118,7 +118,7 @@ class ScaleCarPage(QWidget):
         pid_layout.addWidget(self.pid_status)
         right = QVBoxLayout()
         right.addWidget(pid_box, 1)
-        self.yolo_picture = picture_factory('YOLO · 물체 찾기')
+        self.yolo_picture = picture_factory('YOLO · 카메라 2 물체 찾기')
         self.yolo_picture.image.setMinimumHeight(80)
         self.yolo_picture.clear('YOLO 모델을 선택하세요')
         self.yolo_pick = QPushButton('YOLO 모델 선택 · best.pt')
@@ -220,6 +220,7 @@ class ScaleCarPage(QWidget):
         self.enabled = True
         self.last_stamp = None
         self.start_yolo()
+        self.studio.ensure_live_camera()
         panel = self.studio.live.cameras[self.camera.currentIndex()]
         if panel.worker is None:
             self.studio.live.toggle_camera(panel)
@@ -269,7 +270,7 @@ class ScaleCarPage(QWidget):
                 if self.yolo_generation == self.generation and self.enabled and active and not self.closing:
                     if self.yolo_operation == 'model':
                         self.yolo_model = result
-                    elif self.sample() is not None and time.monotonic()-self.yolo_stamp < 2:
+                    elif self.studio.live_sample() is not None and time.monotonic()-self.yolo_stamp < 2:
                         frame, count, ms = result
                         self.yolo_picture.display(frame, f'실시간 · {count}개 물체 · {ms:.0f} ms')
             except Exception as exc:
@@ -277,9 +278,9 @@ class ScaleCarPage(QWidget):
                 self.yolo_picture.clear('YOLO 처리 실패: ' + str(exc))
         if self.closing or not active or not self.enabled:
             return
-        sample = self.sample()
+        sample = self.studio.live_sample()
         if sample is None:
-            self.yolo_picture.clear('실시간 카메라 수신 대기')
+            self.yolo_picture.clear('카메라 2 수신 대기')
             return
         if self.yolo_model is None and self.yolo_future is None and not Path(self.studio.weights.text().strip()).is_file():
             self.yolo_picture.clear('YOLO 모델 선택에서 best.pt를 고르세요')

@@ -96,18 +96,19 @@ class Segmenter:
         self.model.eval()
 
     def predict(self, frame):
-        # 이미지 전처리 & 차선 검출 ② 색 값 정리하기: BGR → RGB → 학습 때의 숫자 범위
+        # 이미지 전처리 & 차선 검출 ② BGR → RGB 변경 및 정규화: BGR → RGB → 학습 때의 숫자 범위
         rgb = frame[:, :, ::-1].astype(np.float32) / 255.0
         rgb = (rgb - np.array([0.485, 0.456, 0.406], np.float32)) / np.array([0.229, 0.224, 0.225], np.float32)
-        # 이미지 전처리 & 차선 검출 ③ 모델에 넣기: [색상, 세로, 가로] 순서의 사진 1장 묶음
+        # 이미지 전처리 & 차선 검출 ③ 사진 데이터 구조 변경: [색상, 세로, 가로] 순서의 사진 1장 묶음
         channels = rgb.transpose(2, 0, 1).copy()
         tensor = torch.from_numpy(channels)
         tensor = tensor.unsqueeze(0)
         tensor = tensor.to(self.device)
         with torch.inference_mode():
+            # 이미지 전처리 & 차선 검출 ④ 모델 추론: 픽셀별 클래스 점수 벡터
             logits = self.model(tensor)
             logits = torch.nn.functional.interpolate(logits, size=frame.shape[:2], mode='bilinear', align_corners=True)
-            # 이미지 전처리 & 차선 검출 ④ 차선 번호 고르기: 실선 2, 점선 3
+            # 이미지 전처리 & 차선 검출 ⑤ 가장 높은 점수의 클래스 선택: 실선 2, 점선 3
             labels = logits.argmax(1)[0]
             labels = labels.cpu().numpy()
             return labels.astype(np.uint8)
@@ -295,7 +296,7 @@ class DrivingPipeline:
         self.segmenter = Segmenter(device=device)
 
     def process(self, frame, stamp, scan_y=0.75, target_x=0.79):
-        # 이미지 전처리 & 차선 검출 ① 크기 맞추기: 가로 640, 세로 352
+        # 이미지 전처리 & 차선 검출 ① 이미지 크기 변경: 가로 640, 세로 352
         image = cv2.resize(frame, (640, 352))
         labels = self.segmenter.predict(image)
         # 주행 오차 계산 ①~③: 차선 위치 → 기준 차선 → 가로 오차

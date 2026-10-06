@@ -37,3 +37,70 @@ def test_queue_keeps_newest_when_full():
     for n in range(10):
         publish(out, 'data', n)
     assert [out.get_nowait()[2], out.get_nowait()[2]] == [8, 9]
+
+
+def test_camera_recovers_after_second_device_initialization(monkeypatch):
+    import sys
+    from types import SimpleNamespace
+    from session_2 import sensors
+
+    class Output(queue.Queue):
+        def cancel_join_thread(self):
+            pass
+
+    now = [0.0]
+    stopped = [False]
+    released = []
+    samples = iter([(0.1, True), (1.2, False), (2.4, False), (3.0, True)])
+
+    def read():
+        try:
+            now[0], ok = next(samples)
+        except StopIteration:
+            stopped[0] = True
+            return False, None
+        return ok, np.zeros((2, 2, 3), np.uint8) if ok else None
+
+    camera = SimpleNamespace(isOpened=lambda: True, set=lambda *args: True,
+                             read=read, release=lambda: released.append(True))
+    monkeypatch.setitem(sys.modules, 'cv2', SimpleNamespace(
+        CAP_AVFOUNDATION=1200, CAP_DSHOW=700, CAP_V4L2=200, CAP_ANY=0,
+        CAP_PROP_FRAME_WIDTH=3, CAP_PROP_FRAME_HEIGHT=4, CAP_PROP_FPS=5,
+        VideoCapture=lambda *args: camera))
+    monkeypatch.setattr(sensors.time, 'monotonic', lambda: now[0])
+    out = Output()
+    sensors.camera_worker(out, SimpleNamespace(is_set=lambda: stopped[0], wait=lambda _: None), 0, 320, 240, 10)
+    messages = list(out.queue)
+    assert [kind for kind, _, _ in messages] == ['data', 'data']
+    assert [stamp for _, stamp, _ in messages] == [0.1, 3.0]
+    assert released == [True]
+
+
+def test_camera_persistent_failure_still_exits_and_releases(monkeypatch):
+    import sys
+    from types import SimpleNamespace
+    from session_2 import sensors
+
+    class Output(queue.Queue):
+        def cancel_join_thread(self):
+            pass
+
+    now = [0.0]
+    released = []
+
+    def read():
+        now[0] += 1.0
+        return False, None
+
+    camera = SimpleNamespace(isOpened=lambda: True, set=lambda *args: True,
+                             read=read, release=lambda: released.append(True))
+    monkeypatch.setitem(sys.modules, 'cv2', SimpleNamespace(
+        CAP_AVFOUNDATION=1200, CAP_DSHOW=700, CAP_V4L2=200, CAP_ANY=0,
+        CAP_PROP_FRAME_WIDTH=3, CAP_PROP_FRAME_HEIGHT=4, CAP_PROP_FPS=5,
+        VideoCapture=lambda *args: camera))
+    monkeypatch.setattr(sensors.time, 'monotonic', lambda: now[0])
+    out = Output()
+    sensors.camera_worker(out, SimpleNamespace(is_set=lambda: False, wait=lambda _: None), 0, 320, 240, 10)
+    kind, _, text = out.get_nowait()
+    assert kind == 'error' and '10초' in text and now[0] == 10.0
+    assert released == [True]

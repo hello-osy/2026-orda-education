@@ -33,7 +33,7 @@ def test_standard_bag_roundtrip_and_seek(tmp_path):
         scan=snap[SCAN_TOPIC]['data']
         assert scan.shape==(2,3)
         assert sorted(scan[:,2])==[1000,2000]
-        assert -270 in scan[:,1]  # ROS CCW -> clockwise display, same as +90.
+        assert 90 in scan[:,1]  # SLLIDAR bearing +90 -> A1 raw +90.
         assert CAMERA_TOPICS[1] not in bag.snapshot(0,CAMERA_TOPICS)
         assert bag.snapshot(0,[CAMERA_TOPICS[0]])[CAMERA_TOPICS[0]]['index']==0
     finally:bag.close()
@@ -74,3 +74,37 @@ def test_capture_with_korean_and_spaces_in_path(tmp_path):
         rows = list(csv.DictReader(handle))
     assert all('수업 녹화' in row['source_bag'] for row in rows)
     assert json.loads((output/'summary.json').read_text(encoding='utf-8'))['counts'] == counts
+
+
+def test_competition_scan_cardinal_directions():
+    from types import SimpleNamespace
+    from session_2.bagio import decode_scan
+    from session_2.sensors import scan_xy
+    # 대회 LaserScan: 앞 -180, 왼쪽 -90, 뒤 0, 오른쪽 +90.
+    msg = SimpleNamespace(angle_min=-np.pi, angle_increment=np.pi/2,
+                          ranges=[1., 2., 3., 4.], range_min=.15, range_max=12.)
+    np.testing.assert_allclose(scan_xy(decode_scan(msg), 6),
+                               [[0, -1], [-2, 0], [0, 3], [4, 0]], atol=1e-6)
+
+
+def test_recorded_scan_matches_competition_bearings_and_live_view(tmp_path):
+    from session_2.bagio import SCAN_TYPE
+    from session_2.sensors import scan_xy
+    from rosbags.typesys import Stores, get_typestore
+    raw = np.array([[10, 0, 1000], [10, 90, 2000],
+                    [10, 180, 3000], [10, 270, 4000]])
+    writer = BagWriter(tmp_path/'directions', [SCAN_TOPIC])
+    writer.write(SCAN_TOPIC, 1_700_000_000_000_000_000, raw)
+    writer.close()
+    with Reader(tmp_path/'directions') as reader:
+        _, _, data = next(reader.messages())
+        msg = get_typestore(Stores.ROS2_JAZZY).deserialize_cdr(data, SCAN_TYPE)
+        np.testing.assert_allclose(msg.ranges[[0, 90, 180, 270]], [3, 2, 1, 4])
+    bag = BagArchive(tmp_path/'directions')
+    try:
+        _, replay = bag.read(SCAN_TOPIC, 0)
+        # 거리별로 대응시켜 순서와 무관하게 실시간/재생 좌표를 비교한다.
+        replay = replay[np.argsort(replay[:, 2])]
+        np.testing.assert_allclose(scan_xy(replay, 6), scan_xy(raw, 6), atol=1e-6)
+    finally:
+        bag.close()

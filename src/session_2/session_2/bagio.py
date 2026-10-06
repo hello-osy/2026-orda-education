@@ -46,8 +46,9 @@ def decode_scan(msg):
     distances = np.asarray(msg.ranges)
     angles = msg.angle_min + np.arange(len(distances)) * msg.angle_increment
     valid = np.isfinite(distances) & (distances >= msg.range_min) & (distances <= msg.range_max) & (distances > 0)
-    # ROS LaserScan: +각도는 반시계. 화면 좌표는 오른쪽이 +각도이므로 반전.
-    return np.column_stack((np.ones(valid.sum()), -np.rad2deg(angles[valid]), distances[valid] * 1000)).astype(np.float32)
+    # 대회 sllidar_ros2(inverted=false): ROS 각도 = 180° − A1 원시 각도.
+    # 화면 내부는 실시간 센서와 같은 A1 원시 각도를 사용한다.
+    return np.column_stack((np.ones(valid.sum()), 180.0 - np.rad2deg(angles[valid]), distances[valid] * 1000)).astype(np.float32)
 
 
 class BagWriter:
@@ -72,13 +73,13 @@ class BagWriter:
 
     def write(self, topic, ns, payload):
         if topic == SCAN_TOPIC:
-            # A1의 시계방향 각도를 ROS 좌표(반시계 방향) 1도 bin에 배치한다.
+            # 대회 sllidar_ros2와 같은 180° − 원시 각도로 1도 bin에 배치한다.
             ranges = np.full(360, np.inf, dtype=np.float32)
             intensities = np.zeros(360, dtype=np.float32)
             for quality, angle, distance in payload:
                 if not np.isfinite([quality, angle, distance]).all() or quality <= 0 or not 150 <= distance <= 12000:
                     continue
-                index = round(-float(angle)) % 360
+                index = round(180.0 - float(angle)) % 360
                 if distance / 1000 < ranges[index]:
                     ranges[index], intensities[index] = distance / 1000, quality
             period = (ns - self.previous_scan) / 1e9 if self.previous_scan is not None else 0.
