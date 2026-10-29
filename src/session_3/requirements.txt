@@ -1,0 +1,15 @@
+# 기존 .venv에 추가 설치. ROS/Gazebo는 OS별 설치 절차를 따른다.
+numpy>=1.24,<3
+opencv-python>=4.8,<6; sys_platform == 'darwin'
+opencv-python-headless>=4.8,<6; sys_platform == 'linux'
+PySide6-Essentials>=6.6,<7
+PyYAML>=6,<7
+pyserial==3.5
+rplidar-roboticia==0.9.5
+setuptools>=65,<81
+colcon-common-extensions>=0.3
+# macOS 소스 빌드 ROS의 Python 런타임은 별도 프로젝트 venv에도 필요하다.
+lark>=1,<2
+netifaces>=0.11
+psutil>=5.9
+empy==3.3.4

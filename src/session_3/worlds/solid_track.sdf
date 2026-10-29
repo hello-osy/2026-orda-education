@@ -1,0 +1,257 @@
+<?xml version='1.0' encoding='utf-8'?>
+<sdf version="1.9">
+  <world name="orda_track">
+    <physics name="physics" type="ignored">
+      <max_step_size>.002</max_step_size>
+      <real_time_factor>1</real_time_factor>
+    </physics>
+    <plugin filename="gz-sim-physics-system" name="gz::sim::systems::Physics" />
+    <plugin filename="gz-sim-user-commands-system" name="gz::sim::systems::UserCommands" />
+    <plugin filename="gz-sim-scene-broadcaster-system" name="gz::sim::systems::SceneBroadcaster" />
+    <plugin filename="gz-sim-sensors-system" name="gz::sim::systems::Sensors">
+      <render_engine>ogre2</render_engine>
+    </plugin>
+    <gravity>0 0 -9.81</gravity>
+    <scene>
+      <ambient>.65 .65 .65 1</ambient>
+      <background>.75 .83 .91 1</background>
+      <shadows>false</shadows>
+    </scene>
+    <light type="directional" name="sun">
+      <pose>0 0 10 0 0 0</pose>
+      <diffuse>.8 .8 .8 1</diffuse>
+      <specular>.1 .1 .1 1</specular>
+      <direction>-.4 -.2 -1</direction>
+      <cast_shadows>false</cast_shadows>
+    </light>
+    <gui fullscreen="false">
+      <plugin filename="MinimalScene" name="3D View">
+        <gz-gui>
+          <title>ORDA Session 3</title>
+          <property type="bool" key="showTitleBar">false</property>
+          <property type="string" key="state">docked</property>
+        </gz-gui>
+        <engine>ogre2</engine>
+        <scene>scene</scene>
+        <camera_pose>-9 -10 11 0 .65 .83</camera_pose>
+      </plugin>
+      <plugin filename="GzSceneManager" name="Scene Manager">
+        <gz-gui>
+          <property type="string" key="state">floating</property>
+          <property type="bool" key="showTitleBar">false</property>
+          <property type="double" key="width">5</property>
+          <property type="double" key="height">5</property>
+        </gz-gui>
+      </plugin>
+      <plugin filename="InteractiveViewControl" name="View control">
+        <gz-gui>
+          <property type="string" key="state">floating</property>
+          <property type="bool" key="showTitleBar">false</property>
+          <property type="double" key="width">5</property>
+          <property type="double" key="height">5</property>
+        </gz-gui>
+      </plugin>
+      <plugin filename="EntityContextMenuPlugin" name="Entity context menu">
+        <gz-gui>
+          <property type="string" key="state">floating</property>
+          <property type="bool" key="showTitleBar">false</property>
+          <property type="double" key="width">5</property>
+          <property type="double" key="height">5</property>
+        </gz-gui>
+      </plugin>
+      <plugin filename="CameraTracking" name="Camera tracking">
+        <gz-gui>
+          <property type="string" key="state">floating</property>
+          <property type="bool" key="showTitleBar">false</property>
+          <property type="double" key="width">5</property>
+          <property type="double" key="height">5</property>
+        </gz-gui>
+      </plugin>
+      <plugin filename="WorldControl" name="World control">
+        <gz-gui>
+          <property type="string" key="state">floating</property>
+          <property type="bool" key="showTitleBar">false</property>
+        </gz-gui>
+        <play_pause>true</play_pause>
+        <step>true</step>
+        <start_paused>false</start_paused>
+        <use_event>true</use_event>
+      </plugin>
+    </gui>
+    <model name="ground">
+      <static>true</static>
+      <pose>0 0 -.05 0 0 0</pose>
+      <link name="body">
+        <collision name="collision">
+          <geometry>
+            <box>
+              <size>20 14 .1</size>
+            </box>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <box>
+              <size>20 14 .1</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>.13 .36 .18 1</ambient>
+            <diffuse>.13 .36 .18 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+    <include>
+      <uri>model://orda_track</uri>
+    </include>
+    <include>
+      <uri>model://orda_car</uri>
+      <pose>-2 -2.5 .015 0 0 0</pose>
+    </include>
+    <model name="north_wall">
+      <static>true</static>
+      <pose>0 5 .45 0 0 0</pose>
+      <link name="body">
+        <collision name="collision">
+          <geometry>
+            <box>
+              <size>16 .12 .9</size>
+            </box>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <box>
+              <size>16 .12 .9</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>.72 .72 .76 1</ambient>
+            <diffuse>.72 .72 .76 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+    <model name="south_wall">
+      <static>true</static>
+      <pose>0 -5 .45 0 0 0</pose>
+      <link name="body">
+        <collision name="collision">
+          <geometry>
+            <box>
+              <size>16 .12 .9</size>
+            </box>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <box>
+              <size>16 .12 .9</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>.72 .72 .76 1</ambient>
+            <diffuse>.72 .72 .76 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+    <model name="west_wall">
+      <static>true</static>
+      <pose>-8 0 .45 0 0 0</pose>
+      <link name="body">
+        <collision name="collision">
+          <geometry>
+            <box>
+              <size>.12 10 .9</size>
+            </box>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <box>
+              <size>.12 10 .9</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>.72 .72 .76 1</ambient>
+            <diffuse>.72 .72 .76 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+    <model name="east_wall">
+      <static>true</static>
+      <pose>8 0 .45 0 0 0</pose>
+      <link name="body">
+        <collision name="collision">
+          <geometry>
+            <box>
+              <size>.12 10 .9</size>
+            </box>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <box>
+              <size>.12 10 .9</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>.72 .72 .76 1</ambient>
+            <diffuse>.72 .72 .76 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+    <model name="red_box">
+      <static>true</static>
+      <pose>1 0 .35 0 0 .3</pose>
+      <link name="body">
+        <collision name="collision">
+          <geometry>
+            <box>
+              <size>.7 .7 .7</size>
+            </box>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <box>
+              <size>.7 .7 .7</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>.8 .12 .08 1</ambient>
+            <diffuse>.8 .12 .08 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+    <model name="yellow_box">
+      <static>true</static>
+      <pose>-3 0 .25 0 0 -.2</pose>
+      <link name="body">
+        <collision name="collision">
+          <geometry>
+            <box>
+              <size>.5 .5 .5</size>
+            </box>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <box>
+              <size>.5 .5 .5</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>.95 .72 .05 1</ambient>
+            <diffuse>.95 .72 .05 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+  </world>
+</sdf>

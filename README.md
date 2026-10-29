@@ -340,5 +340,6 @@ ROS 2와 자율주행이 처음이어도 괜찮습니다. **명령어 하나로 
 
 - [Session 1 · 인지 → 판단 → PID 시각화](docs/SESSION_1.md) — `bash scripts/session_1.sh`
 - [Session 2 · 센서 · bag · YOLOv8 · 코드 · 스케일카 주행](docs/SESSION_2.md) — `bash scripts/session_2.sh`
+- [Session 3 · Gazebo · ROS 2 토픽 실습](docs/SESSION_3.md) — `bash scripts/session_3.sh`
 
 Session 2는 ROS 데몬/colcon 빌드 없이 프로젝트 `.venv`에서 실행합니다. 공통 개발환경은 위 안내를 그대로 사용하며, macOS·Ubuntu 24.04·Windows 11(WSL2 및 네이티브)의 실행과 장치 설정은 [SESSION_2.md](docs/SESSION_2.md)에 있습니다.
