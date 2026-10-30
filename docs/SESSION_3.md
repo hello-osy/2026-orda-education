@@ -165,13 +165,30 @@ ros2 run session_3 lidar_viewer
 <details>
 <summary>5. 모터 제어 토픽을 발행해 시뮬레이터 자동차 움직이고 정지하기</summary>
 
-`[조향각(도), 속도 PWM]`입니다. 조향은 양수=왼쪽, 음수=오른쪽이며 ±30도까지입니다. 아래 명령은 직진합니다. **`Ctrl+C`로 발행을 끝내면 약 0.5초 뒤 멈춥니다.**
+`[조향각(도), 속도 PWM]`입니다. 조향은 양수=왼쪽, 음수=오른쪽이며 ±30도까지입니다. PWM `200`은 기존 `100`의 2배 속도(약 0.78m/s)이며, `255`까지 올릴 수 있습니다.
+
+**명령은 하나씩 실행하고, 다음 명령 전에 `Ctrl+C`로 발행을 끝냅니다. 약 0.5초 뒤 멈춥니다.**
+
+직진:
 
 ```bash
-ros2 topic pub -r 10 /motor_control std_msgs/msg/Int16MultiArray "{data: [0, 100]}"
+source scripts/session_3_env.sh 30
+ros2 topic pub -r 10 /motor_control std_msgs/msg/Int16MultiArray "{data: [0, 200]}"
 ```
 
-명시적인 정지 명령:
+좌회전(왼쪽 15도):
+
+```bash
+ros2 topic pub -r 10 /motor_control std_msgs/msg/Int16MultiArray "{data: [15, 200]}"
+```
+
+우회전(오른쪽 15도):
+
+```bash
+ros2 topic pub -r 10 /motor_control std_msgs/msg/Int16MultiArray "{data: [-15, 200]}"
+```
+
+명시적인 정지 명령(기존 발행을 `Ctrl+C`로 끝낸 뒤 실행):
 
 ```bash
 ros2 topic pub --once /motor_control std_msgs/msg/Int16MultiArray "{data: [0, 0]}"
@@ -222,21 +239,25 @@ ros2 topic pub -r 10 /motor_control std_msgs/msg/Int16MultiArray "{data: [0, 0]}
 <details>
 <summary>8. 센서 토픽을 bag으로 녹화하고 재생하기</summary>
 
-실차 센서만 녹화합니다. 몇 초 뒤 `Ctrl+C`로 저장을 마칩니다. 같은 폴더가 이미 있으면 이름을 바꿉니다.
+실차 센서만 녹화합니다. **기존 녹화·재생을 종료한 뒤 실행하세요. 기존 `practice` 녹화는 삭제하고 새로 저장합니다.** 몇 초 뒤 `Ctrl+C`를 한 번 눌러 저장을 마칩니다. `--disable-keyboard-controls`는 키보드 입력 스레드로 인한 종료 지연을 피하는 옵션이며, `Ctrl+C`는 그대로 작동합니다.
 
 ```bash
 source scripts/session_3_env.sh 31
 mkdir -p workspace/session_3/bags
-ros2 bag record --storage sqlite3 -o workspace/session_3/bags/practice \
-  /scan /camera/high/image_raw /camera/low/image_raw
+rm -rf -- workspace/session_3/bags/practice
+ros2 bag record --storage sqlite3 --disable-keyboard-controls \
+  -o workspace/session_3/bags/practice \
+  --topics /scan /camera/high/image_raw /camera/low/image_raw
 ```
 
 재생은 별도 도메인 `32`에서 합니다. **터미널 1:**
 
 ```bash
 source scripts/session_3_env.sh 32
-ros2 bag play workspace/session_3/bags/practice --clock --loop
+ros2 bag play workspace/session_3/bags/practice --clock --loop --disable-keyboard-controls
 ```
+
+이전 명령으로 실행해 `Ctrl+C` 뒤 멈춰 있다면 **Enter를 한 번** 눌러 입력 대기를 해제합니다.
 
 </details>
 

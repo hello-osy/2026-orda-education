@@ -1,5 +1,7 @@
 # Session 3 검증 (2026-10-30)
 
+`Ctrl+C` 종료 지연도 별도로 검사했습니다. 실제 멈춘 bag 재생 프로세스는 키보드 스레드의 `read()` / `join()`에서 대기했습니다. 격리 도메인·가상 터미널에서도 기본 녹화·재생은 5초 안에 종료되지 않았고 Enter 입력 후 약 0.17초에 종료됐습니다. `--disable-keyboard-controls` 적용 후 녹화 0.149초·재생 0.258초, 일반 `ros2 topic pub`는 0.170초에 종료됐습니다. 측정 결과는 `workspace/session_3/validation/cli_shutdown/summary.json`과 같은 폴더의 로그에 저장했습니다. 이는 해당 Mac 환경에서의 측정값입니다.
+
 macOS 27.0.1 · Python 3.10 · 기존 소스 빌드 ROS 2 Jazzy에서 확인했습니다. Gazebo Sim 8.15, msgs 10.4, transport 13.6을 사용했습니다.
 
 | 항목 | 결과 |
