@@ -48,7 +48,64 @@ def lane(camera):
     # error는 왼쪽 +, 오른쪽 -, 가운데 0입니다.
     # 예: {"valid": True, "error": 0.1} → 왼쪽으로 0.1m 떨어진 목표점.
     # 못 찾은 예: {"valid": False, "error": 0.0}
-    return {"valid": False, "error": 0.0}
+    import math
+    import cv2
+    import numpy as np
+
+    not_found = {"valid": False, "error": 0.0}
+    if camera is None:
+        return not_found
+    image = np.asarray(camera)
+    if image.ndim != 3 or image.shape[2] != 3:
+        return not_found
+    height, width = image.shape[:2]
+
+    # 1) 색으로 차선을 찾습니다: 노란 중앙선(왼쪽) / 흰 가장자리선(오른쪽).
+    hsv = cv2.cvtColor(np.ascontiguousarray(image, dtype=np.uint8), cv2.COLOR_RGB2HSV)
+    hue, sat, val = hsv[:, :, 0], hsv[:, :, 1], hsv[:, :, 2]
+    yellow = (hue > 18) & (hue < 40) & (sat > 100) & (val > 100)
+    white = (sat < 60) & (val > 175)
+    # 라바콘의 흰 줄무늬가 흰 선으로 오인되지 않도록 주황색 주변은 제외합니다.
+    orange = (hue > 3) & (hue < 17) & (sat > 120) & (val > 100)
+    orange = cv2.dilate(orange.astype(np.uint8), np.ones((9, 9), np.uint8)) > 0
+    white &= ~orange
+
+    # 2) 픽셀을 지면 좌표(m)로 바꿉니다. 카메라 높이 0.18m, 아래로 0.12rad 기울임, 가로 시야 1.2rad.
+    focal = width / (2 * math.tan(1.2 / 2))
+    v, u = np.mgrid[:height, :width]
+    vertical = (v - height / 2) / focal
+    down = math.sin(.12) + vertical * math.cos(.12)
+    below_horizon = down > .02
+    scale = .18 / np.maximum(down, .02)
+    ahead = scale * (math.cos(.12) - vertical * math.sin(.12))   # 앞쪽 거리
+    left = -scale * (u - width / 2) / focal                      # 왼쪽 +, 오른쪽 -
+
+    # 3) 앞쪽 거리 구간마다 선의 좌우 위치(중앙값)를 구해 차로 가운데를 계산합니다.
+    half_lane = .77          # 차로 폭 약 1.54m의 절반. 한쪽 선만 보일 때 사용합니다.
+    centers, weights = [], []
+    for near, far, weight in ((.55, 1.1, 1.0), (1.1, 1.8, 1.5), (1.8, 2.6, 1.0)):
+        zone = below_horizon & (ahead > near) & (ahead < far) & (np.abs(left) < 1.6)
+        yellow_y = left[zone & yellow]
+        white_y = left[zone & white]
+        line_left = float(np.median(yellow_y)) if yellow_y.size >= 6 else None
+        line_right = float(np.median(white_y)) if white_y.size >= 6 else None
+        # 한쪽 선이 반대편 선처럼 보이는 경우(좌우가 뒤집힘)는 버립니다.
+        if line_left is not None and line_right is not None and line_left <= line_right:
+            continue
+        if line_left is not None and line_right is not None:
+            centers.append((line_left + line_right) / 2)
+        elif line_left is not None and line_left > -.2:
+            centers.append(line_left - half_lane)
+        elif line_right is not None and line_right < .2:
+            centers.append(line_right + half_lane)
+        else:
+            continue
+        weights.append(weight)
+
+    if not centers:
+        return not_found
+    error = float(np.average(centers, weights=weights))
+    return {"valid": True, "error": max(-1.5, min(1.5, error))}
 
 
 def rubbercone(lidar):
@@ -117,6 +174,19 @@ def yolo(labels, bbox, size, conf):
 
 
 class DrivingController:
+    KP, KI, KD = 30.0, 2.0, 3.0   # PID 이득: 오차 1m당 조향 30도 수준
+    NEAR_LIGHT_PX = 18            # 신호등 상자 크기(px)가 이 이상이면 정지선 근처
+
+    def __init__(self):
+        self.mode = 'pending'
+        self.stopped_at_signal = False
+        self.passed_light = False
+        self.light_missing = 0
+        self.integral, self.previous_error, self.previous_time = 0.0, None, None
+        self.previous_mode = None
+        self.lost_since = None
+        self.last_steer, self.last_pwm = 0, 125
+
     def step(self, lane_result, rubbercone_result, yolo_result):
         # TODO 4: 위 세 함수의 결과로 주행 모드·PID 조향·신호 정지/출발을 결정합니다.
         # lane_result: lane(camera)가 반환한 dict.
@@ -125,10 +195,70 @@ class DrivingController:
         # 출력: [조향각, 속도 PWM] 정수 2개. 조향각 -30~30도(왼쪽 +), 전진 PWM 0~255.
         # 예: [10, 125] → 왼쪽 10도로 전진 / [0, 0] → 정지.
         # 입력 None이면 정지하고, 신호를 못 봤다는 이유만으로 출발하지 마세요.
+        import time
+
+        now = time.monotonic()
         if any(result is None for result in (lane_result, rubbercone_result, yolo_result)):
+            # 센서가 끊기면 정지합니다. PID는 오래된 값으로 이어가지 않도록 초기화합니다.
+            self.mode = 'stale'
+            self.integral, self.previous_error, self.previous_time = 0.0, None, None
             return [0, 0]
-        # 우선 직진합니다. 위 publish_motor가 /session4/motor_control로 발행합니다.
-        return [0, 125]
+
+        # 1) 신호등: 정지선 근처(상자가 충분히 커졌을 때)에서 빨강/노랑이면 정지하고,
+        #    초록이 보이면 출발합니다. 신호를 못 봤다는 이유만으로는 출발하지 않습니다.
+        light = yolo_result.get('traffic_light', {})
+        seen = bool(light.get('detected'))
+        color = light.get('color', 'unknown') if seen else 'unknown'
+        near = seen and max(light.get('size', [0, 0])) >= self.NEAR_LIGHT_PX
+        # 신호등이 시야에서 사라진 뒤 1초가 지나면 다음 바퀴를 위해 다시 준비합니다.
+        self.light_missing = 0 if seen else self.light_missing + 1
+        if self.light_missing * 0.05 >= 1.0:
+            self.passed_light = False
+        if self.stopped_at_signal:
+            if near and color == 'green':
+                self.stopped_at_signal, self.passed_light = False, True
+            else:
+                self.mode = 'signal_stop'
+                return [0, 0]
+        elif near and color == 'green':
+            self.passed_light = True
+        elif near and color in ('red', 'yellow') and not self.passed_light:
+            self.stopped_at_signal = True
+            self.mode = 'signal_stop'
+            return [0, 0]
+
+        # 2) 주행 모드: 라바콘 길이 보이면 라이다 기준, 아니면 차선 기준으로 달립니다.
+        if rubbercone_result.get('valid'):
+            self.mode, error, self.lost_since = 'cone', rubbercone_result['error'], None
+        elif lane_result.get('valid'):
+            self.mode, error, self.lost_since = 'lane', lane_result['error'], None
+        else:
+            # 길을 잠깐 놓치면 마지막 조향을 유지하고, 오래되면 천천히 가다 멈춥니다.
+            if self.lost_since is None:
+                self.lost_since = now
+            lost = now - self.lost_since
+            self.mode = 'lost'
+            if lost < 0.5:
+                return [self.last_steer, self.last_pwm]
+            if lost < 1.5:
+                return [self.last_steer, 70]
+            return [0, 0]
+
+        # 3) PID: error(m, 왼쪽 +) → 조향각(도, 왼쪽 +). 모드가 바뀌면 이전 오차는 버립니다.
+        if self.previous_mode != self.mode:
+            self.integral, self.previous_error, self.previous_time = 0.0, None, None
+        self.previous_mode = self.mode
+        dt = 0.05 if self.previous_time is None else min(max(now - self.previous_time, 0.01), 0.2)
+        derivative = 0.0 if self.previous_error is None else (error - self.previous_error) / dt
+        self.integral = max(-0.5, min(0.5, self.integral + error * dt))
+        self.previous_error, self.previous_time = error, now
+        steer = self.KP * error + self.KI * self.integral + self.KD * derivative
+        steer = int(round(max(-30, min(30, steer))))
+
+        # 4) 속도: 많이 꺾을수록 느리게 달립니다.
+        pwm = int(round(max(85, 125 - 2.0 * abs(steer))))
+        self.last_steer, self.last_pwm = steer, pwm
+        return [steer, pwm]
 
 
 # ========================================
