@@ -4,7 +4,7 @@ ROS 2와 자율주행이 처음이어도 괜찮습니다. **명령어 하나로 
 
 ## 1. 프로젝트 개요
 
-**보고 → 판단하고 → 움직임을 계산하는 과정**을 단계별로 살펴봅니다. Session 1은 녹화 영상으로 인지·판단·PID를 배우고, Session 2는 USB 센서 수집, bag, YOLOv8 학습·추론과 실제 스케일카 제어 코드로 이어집니다.
+**보고 → 판단하고 → 움직임을 계산하는 과정**을 단계별로 살펴봅니다. Session 1은 녹화 영상으로 인지·판단·PID를 배우고, Session 2는 USB 센서 수집, bag, YOLOv8 학습·추론과 실제 스케일카 제어 코드로 이어집니다. Session 3에서 ROS 2 토픽을 연습한 뒤, Session 4에서는 Git·Codex로 네 역할을 나누어 Gazebo 자율주행 코드를 작성합니다.
 
 > <details>
 > <summary>무엇을 배우나요?</summary>
@@ -341,5 +341,6 @@ ROS 2와 자율주행이 처음이어도 괜찮습니다. **명령어 하나로 
 - [Session 1 · 인지 → 판단 → PID 시각화](docs/SESSION_1.md) — `bash scripts/session_1.sh`
 - [Session 2 · 센서 · bag · YOLOv8 · 코드 · 스케일카 주행](docs/SESSION_2.md) — `bash scripts/session_2.sh`
 - [Session 3 · Gazebo · ROS 2 토픽 실습](docs/SESSION_3.md) — `bash scripts/session_3.sh`
+- [Session 4 · Git · Codex · 역할별 자율주행](docs/SESSION_4.md) — `bash scripts/session_4.sh`
 
 Session 2는 ROS 데몬/colcon 빌드 없이 프로젝트 `.venv`에서 실행합니다. 공통 개발환경은 위 안내를 그대로 사용하며, macOS·Ubuntu 24.04·Windows 11(WSL2 및 네이티브)의 실행과 장치 설정은 [SESSION_2.md](docs/SESSION_2.md)에 있습니다.

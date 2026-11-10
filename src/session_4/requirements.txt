@@ -1,0 +1,9 @@
+# Session 3까지 설치한 프로젝트 .venv를 그대로 사용한다.
+numpy>=1.24,<3
+opencv-python>=4.8,<6; sys_platform == 'darwin'
+opencv-python-headless>=4.8,<6; sys_platform == 'linux'
+PyYAML>=6,<7
+PySide6-Essentials>=6.6,<7
+rosbags==0.10.11
+ultralytics==8.4.165
+# 학습 데이터와 신호등 색상·라바콘 가중치는 실습에서 준비한다.

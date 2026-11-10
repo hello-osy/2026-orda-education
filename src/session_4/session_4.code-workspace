@@ -1,0 +1,9 @@
+{
+  "folders": [
+    {"name": "우리 팀 자율주행 코드", "path": "student"}
+  ],
+  "settings": {
+    "terminal.integrated.cwd": "${workspaceFolder}/../../..",
+    "files.exclude": {"**/__pycache__": true}
+  }
+}

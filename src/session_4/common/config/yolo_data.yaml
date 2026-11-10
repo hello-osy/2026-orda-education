@@ -1,0 +1,11 @@
+# Roboflow YOLOv8 내보내기의 data.yaml을 workspace/session_4/dataset에 둡니다.
+# 폴더 구조 예시이며, 사진과 실제 bbox 라벨을 포함하지 않습니다.
+path: .
+train: train/images
+val: valid/images
+nc: 4
+names:
+  0: red
+  1: yellow
+  2: green
+  3: cone

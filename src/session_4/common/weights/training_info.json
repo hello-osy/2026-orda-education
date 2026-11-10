@@ -1,0 +1,49 @@
+{
+  "classes": [
+    "red",
+    "yellow",
+    "green",
+    "cone"
+  ],
+  "model": "YOLOv8n",
+  "sha256": "fd147d0c6e64bc393c823493dba7077773656335cb581c5071f90480673eff1b",
+  "bytes": 6205418,
+  "source": "Gazebo camera images; HSV pseudo-labels, sample overlays visually reviewed",
+  "scope": "Provided Session 4 Gazebo map only; no real-world or independent human-label validation",
+  "device": "Apple MPS",
+  "epochs": 40,
+  "imgsz": 320,
+  "batch": 8,
+  "training_seconds": 194.31622808300017,
+  "dataset": {
+    "train": {
+      "images": 210,
+      "boxes": 714,
+      "missing_labels": 0,
+      "class_counts": {
+        "red": 63,
+        "yellow": 62,
+        "green": 59,
+        "cone": 530
+      }
+    },
+    "val": {
+      "images": 59,
+      "boxes": 199,
+      "missing_labels": 0,
+      "class_counts": {
+        "red": 20,
+        "yellow": 22,
+        "green": 19,
+        "cone": 138
+      }
+    }
+  },
+  "pseudo_label_validation_metrics": {
+    "metrics/precision(B)": 0.9722956734175308,
+    "metrics/recall(B)": 0.9690064578874946,
+    "metrics/mAP50(B)": 0.9812531632612859,
+    "metrics/mAP50-95(B)": 0.8233375619460304,
+    "fitness": 0.8233375619460304
+  }
+}

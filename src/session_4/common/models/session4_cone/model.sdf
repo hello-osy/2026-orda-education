@@ -1,0 +1,53 @@
+<?xml version='1.0' encoding='utf-8'?>
+<sdf version="1.9">
+  <model name="session4_cone">
+    <static>true</static>
+    <link name="cone_body">
+      <visual name="orange">
+        <pose>0 0 0 0 0 0</pose>
+        <geometry>
+          <mesh>
+            <uri>model://session4_cone/meshes/orange.dae</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <ambient>1 .24 .015 1</ambient>
+          <diffuse>1 .24 .015 1</diffuse>
+        </material>
+      </visual>
+      <visual name="white">
+        <pose>0 0 0 0 0 0</pose>
+        <geometry>
+          <mesh>
+            <uri>model://session4_cone/meshes/white.dae</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <ambient>.97 .97 .97 1</ambient>
+          <diffuse>.97 .97 .97 1</diffuse>
+        </material>
+      </visual>
+      <visual name="base">
+        <pose>0 0 .02 0 0 0</pose>
+        <geometry>
+          <box>
+            <size>.40 .40 .04</size>
+          </box>
+        </geometry>
+        <material>
+          <ambient>.045 .045 .045 1</ambient>
+          <diffuse>.045 .045 .045 1</diffuse>
+        </material>
+      </visual>
+      <collision name="cone_collision">
+        <pose>0 0 .375 0 0 0</pose>
+        <geometry>
+          <cylinder>
+            <radius>.18</radius>
+            <length>.75</length>
+          </cylinder>
+        </geometry>
+      </collision>
+    </link>
+  </model>
+</sdf>
